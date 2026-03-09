@@ -28,7 +28,7 @@ st.markdown("""
 @st.cache_data
 def load_data():
     # ตรวจสอบชื่อไฟล์ให้ตรงกับบน GitHub (Case-sensitive)
-    file_name = "Data_2Class_V1.csv" 
+    file_name = "Accident_Project/Data_2Class_V1.csv" 
     
     if os.path.exists(file_name):
         try:
