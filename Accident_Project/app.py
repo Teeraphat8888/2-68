@@ -140,31 +140,54 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ------------------------------------------
 # TAB 1: สถิติ (Overview)
 # ------------------------------------------
+# ------------------------------------------
+# TAB 1: สถิติ (Overview)
+# ------------------------------------------
 with tab1:
+    st.header("ภาพรวมสถานการณ์อุบัติเหตุ")
     if df is not None:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("จำนวนอุบัติเหตุทั้งหมด", f"{len(df):,} ครั้ง")
-        if 'ระดับความเสี่ยง' in df.columns:
-            c2.metric("เสี่ยงสูง (High Risk) 🔴", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงสูง']):,} ครั้ง")
-            c3.metric("เสี่ยงต่ำ (Low Risk) 🟢", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงต่ำ']):,} ครั้ง")
+        def custom_metric(label, value, color):
+            return f"""
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 6px solid {color}; box-shadow: 2px 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                <p style="margin:0px; font-size: 18px; color: #555; font-weight: 500;">{label}</p>
+                <h2 style="margin:0px; color: {color}; font-size: 32px; font-weight: 700;">{value}</h2>
+            </div>
+            """
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(custom_metric("จำนวนอุบัติเหตุทั้งหมด", f"{len(df):,} ครั้ง", "#1E3A8A"), unsafe_allow_html=True)
+        with col2:
+            if 'ระดับความเสี่ยง' in df.columns:
+                low_risk_count = len(df[df['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
+                st.markdown(custom_metric("ความเสี่ยงต่ำ", f"{low_risk_count:,} ครั้ง", "#28B463"), unsafe_allow_html=True)
+        with col3:
+            if 'ระดับความเสี่ยง' in df.columns:
+                high_risk_count = len(df[df['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
+                st.markdown(custom_metric("ความเสี่ยงสูง", f"{high_risk_count:,} ครั้ง", "#D62728"), unsafe_allow_html=True)
+        with col4:
+            if 'จังหวัด' in df.columns:
+                top_province = df['จังหวัด'].mode()[0]
+                st.markdown(custom_metric("จังหวัดที่เกิดเหตุบ่อยสุด", top_province, "#424949"), unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.write("**สัดส่วนความรุนแรง**")
-            fig, ax = plt.subplots()
-            sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
-            st.pyplot(fig)
-        with col_g2:
-            st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา (ไล่สี)**")
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        col_graph1, col_graph2 = st.columns(2)
+        
+        with col_graph1:
+            st.write("**สัดส่วนความรุนแรงของอุบัติเหตุ**")
+            if 'ระดับความเสี่ยง' in df.columns:
+                fig, ax = plt.subplots(figsize=(6, 4))
+                sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], order=['เสี่ยงต่ำ', 'เสี่ยงสูง'], ax=ax)
+                st.pyplot(fig)
+                
+        with col_graph2:
+            st.write("**จำนวนอุบัติเหตุแบ่งตามช่วงเวลา**")
             if 'ช่วงเวลา' in df.columns:
-                counts = df['ช่วงเวลา'].value_counts()
-                fig2, ax2 = plt.subplots()
-                pal = sns.color_palette("Blues_r", len(counts))
-                sns.barplot(y=counts.index, x=counts.values, palette=pal, ax=ax2)
+                fig2, ax2 = plt.subplots(figsize=(6, 4))
+                sns.countplot(data=df, y='ช่วงเวลา', order=df['ช่วงเวลา'].value_counts().index, palette='Blues_r', ax=ax2)
                 st.pyplot(fig2)
     else:
-        st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
+        st.warning("⚠️ ไม่พบไฟล์ข้อมูล CSV หรือ Excel")
 
 # ------------------------------------------
 # TAB 2: แผนที่ (Map)
