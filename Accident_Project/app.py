@@ -29,8 +29,7 @@ if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 # สร้างแถบด้านข้าง (Sidebar) สำหรับ Login
-with st.sidebar:
-    st.image("download.png", width=120) 
+with st.sidebar: 
     st.title("🔐 สำหรับเจ้าหน้าที่")
     
     if not st.session_state['logged_in']:
