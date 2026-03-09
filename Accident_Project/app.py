@@ -58,7 +58,7 @@ with st.sidebar:
 # เปลี่ยนจาก @st.cache_data เป็นแบบดึงใหม่เสมอ เพื่อให้เวลาอัปเดตข้อมูลแล้วหน้าเว็บเปลี่ยนตามทันที
 @st.cache_data
 def load_data():
-    file_name = "Data.csv" 
+    file_name = "Data_2Class_V1.csv" # เปลี่ยนนามสกุลไฟล์
     if os.path.exists(file_name):
         # เปลี่ยนเป็น read_csv และใส่ encoding เพื่อให้อ่านภาษาไทยได้สมบูรณ์
         df = pd.read_csv(file_name, encoding='utf-8') 
