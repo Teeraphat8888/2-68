@@ -56,10 +56,12 @@ with st.sidebar:
 # 3. ฟังก์ชันโหลดไฟล์ทั้งหมด (Data + ML Assets)
 # ==========================================
 # เปลี่ยนจาก @st.cache_data เป็นแบบดึงใหม่เสมอ เพื่อให้เวลาอัปเดตข้อมูลแล้วหน้าเว็บเปลี่ยนตามทันที
+@st.cache_data
 def load_data():
-    file_name = "Data_2Class_V1.xlsx" 
+    file_name = "Data_2Class_V1.csv" # เปลี่ยนนามสกุลไฟล์
     if os.path.exists(file_name):
-        df = pd.read_excel(file_name)
+        # เปลี่ยนเป็น read_csv และใส่ encoding เพื่อให้อ่านภาษาไทยได้สมบูรณ์
+        df = pd.read_csv(file_name, encoding='utf-8') 
         if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
             df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
             df['LATITUDE'] = df['LATITUDE'].fillna(df['LATITUDE'].median())
