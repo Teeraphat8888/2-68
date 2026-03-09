@@ -90,7 +90,7 @@ if 'show_login' not in st.session_state:
 
 with st.sidebar:
     st.image("Accident_Project/download.png", width=100)
-    st.title("ระบบเจ้าหน้าที่")
+    st.title("เข้าสู่ระบบ(เฉพาะเจ้าหน้าที่)")
     
     if not st.session_state['logged_in']:
         if not st.session_state['show_login']:
