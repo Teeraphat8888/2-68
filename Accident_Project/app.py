@@ -203,24 +203,66 @@ with tab2:
 # TAB 3: ทำนายผล (Prediction)
 # ------------------------------------------
 with tab3:
+    st.header("ทดสอบระบบทำนายด้วย Machine Learning")
+    
     if not st.session_state['logged_in']:
-        st.warning("🔒 เนื้อหาส่วนนี้เฉพาะเจ้าหน้าที่ กรุณาล็อกอินที่แถบด้านข้าง")
-    elif model is None:
-        st.error(" ไม่พบไฟล์โมเดล AI (.pkl) กรุณาตรวจสอบว่าอัปโหลดไฟล์โมเดลแล้วหรือไม่")
+        st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
+        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบทำนายความเสี่ยง")
     else:
-        col_in, col_res = st.columns([1, 1])
-        with col_in:
-            st.write("### 📝 ระบุรายละเอียดอุบัติเหตุ")
-            with st.form("ml_form"):
-                time_val = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
-                weather_val = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
-                mc_val = st.number_input("รถจักรยานยนต์ (คัน)", 0, 10, 1)
-                submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
-        
-        with col_res:
-            st.write("### ผลการทำนาย")
-            if submit_pred:
-                st.success("โมเดลเชื่อมต่อสำเร็จ! (กำลังรอการปรับแต่ง Features ให้ตรงกับโมเดลจริง)")
+        if model is None or scaler is None or feature_cols is None:
+            st.error("🚨 ไม่พบไฟล์โมเดล (best_model.pkl, scaler.pkl, feature_columns.pkl) กรุณานำไฟล์มาวางในโฟลเดอร์เดียวกับ app.py")
+        else:
+            col_input, col_result = st.columns([1, 1])
+            
+            with col_input:
+                st.subheader("📝 กรอกข้อมูลเพื่อประเมินความเสี่ยง")
+                with st.form("ml_predict_form"):
+                    time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
+                    weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
+                    accident_type = st.selectbox("ลักษณะการเกิดเหตุ", [
+                        "ชนท้าย", "ชนในทิศทางตรงกันข้าม (ไม่ใช่การแซง)", "พลิกคว่ำ/ตกถนนในทางตรง", 
+                        "พลิกคว่ำ/ตกถนนในทางโค้ง", "ชนสิ่งกีดขวาง (บนผิวจราจร)", "ไม่ระบุ"
+                    ])
+                    
+                    col_n1, col_n2 = st.columns(2)
+                    with col_n1:
+                        motorcycle = st.number_input("รถจักรยานยนต์ (คัน)", min_value=0, max_value=10, value=1)
+                        car = st.number_input("รถยนต์ส่วนบุคคล (คัน)", min_value=0, max_value=10, value=0)
+                    with col_n2:
+                        pickup = st.number_input("รถปิคอัพ (คัน)", min_value=0, max_value=10, value=0)
+                        pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
+                    
+                    submitted = st.form_submit_button("วิเคราะห์ความเสี่ยง (รันโมเดล) 🔍")
+
+            with col_result:
+                st.subheader("📊 ผลลัพธ์จากโมเดล")
+                
+                if submitted:
+                    input_dict = {
+                        'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
+                        'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
+                        'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
+                        'ลักษณะการเกิดเหตุ': [accident_type]
+                    }
+                    input_df = pd.DataFrame(input_dict)
+                    
+                    input_dummies = pd.get_dummies(input_df)
+                    input_final = input_dummies.reindex(columns=feature_cols, fill_value=0)
+                    input_scaled = scaler.transform(input_final)
+                    prediction = model.predict(input_scaled)[0]
+                    
+                    if prediction == 1: 
+                        st.error("### 🔴 ผลการทำนาย: ระดับความเสี่ยงสูง (High Risk)")
+                        st.write("โมเดลวิเคราะห์ว่า: **มีแนวโน้มสูงที่จะเกิดการบาดเจ็บสาหัสหรือเสียชีวิต**")
+                        st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
+                        st.info("- แจ้งเตือนศูนย์การแพทย์ฉุกเฉิน (EMS) ให้เตรียมรถกู้ชีพขั้นสูง\n- เสนอแนะจุดกวดขันวินัยจราจรในพื้นที่พิกัดนี้")
+                    else:
+                        st.success("### 🟢 ผลการทำนาย: ระดับความเสี่ยงต่ำ (Low Risk)")
+                        st.write("โมเดลวิเคราะห์ว่า: **มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือทรัพย์สินเสียหาย**")
+                        st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
+                        st.info("- เฝ้าระวังและปรับปรุงทัศนวิสัยบริเวณถนน\n- ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์")
+                else:
+                    st.write("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มเพื่อรันโมเดลทำนาย")
 
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
