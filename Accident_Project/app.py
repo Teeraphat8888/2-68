@@ -52,9 +52,9 @@ def load_data():
 @st.cache_resource
 def load_ml_assets():
     try:
-        model = joblib.load('best_model.pkl')
-        scaler = joblib.load('scaler.pkl')
-        feature_cols = joblib.load('feature_columns.pkl')
+        model = joblib.load('Accident_Project/best_model.pkl')
+        scaler = joblib.load('Accident_Project/scaler.pkl')
+        feature_cols = joblib.load('Accident_Project/feature_columns.pkl')
         return model, scaler, feature_cols
     except:
         return None, None, None
