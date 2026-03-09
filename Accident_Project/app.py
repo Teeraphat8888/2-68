@@ -126,15 +126,14 @@ with st.sidebar:
 # ==========================================
 # 5. ส่วนแสดงผลเนื้อหาหลัก (Tabs)
 # ==========================================
-st.title("🚑 ระบบวิเคราะห์ความรุนแรงอุบัติเหตุทางถนน")
-st.subheader("เขตสุขภาพที่ 11 | โครงงานพัฒนาโมเดล Machine Learning")
+st.title("แบบจำลองระบบวิเคราะห์ความรุนแรงอุบัติเหตุทางถนน เขตสุขภาพที่ 11")
 st.markdown("---")
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 สถิติภาพรวม", 
-    "🗺️ แผนที่จุดเสี่ยง", 
-    "🚨 ระบบทำนายความรุนแรง", 
-    "📝 จัดการข้อมูล (CRUD)"
+    "สถิติภาพรวม", 
+    "แผนที่จุดเสี่ยง", 
+    "ระบบทำนายความรุนแรง", 
+    "จัดการข้อมูล "
 ])
 
 # ------------------------------------------
@@ -207,7 +206,7 @@ with tab3:
     if not st.session_state['logged_in']:
         st.warning("🔒 เนื้อหาส่วนนี้เฉพาะเจ้าหน้าที่ กรุณาล็อกอินที่แถบด้านข้าง")
     elif model is None:
-        st.error("🚨 ไม่พบไฟล์โมเดล AI (.pkl) กรุณาตรวจสอบว่าอัปโหลดไฟล์โมเดลแล้วหรือไม่")
+        st.error(" ไม่พบไฟล์โมเดล AI (.pkl) กรุณาตรวจสอบว่าอัปโหลดไฟล์โมเดลแล้วหรือไม่")
     else:
         col_in, col_res = st.columns([1, 1])
         with col_in:
@@ -219,9 +218,9 @@ with tab3:
                 submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
         
         with col_res:
-            st.write("### 📊 ผลการทำนาย")
+            st.write("### ผลการทำนาย")
             if submit_pred:
-                st.success("✅ โมเดลเชื่อมต่อสำเร็จ! (กำลังรอการปรับแต่ง Features ให้ตรงกับโมเดลจริง)")
+                st.success("โมเดลเชื่อมต่อสำเร็จ! (กำลังรอการปรับแต่ง Features ให้ตรงกับโมเดลจริง)")
 
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
@@ -230,11 +229,11 @@ with tab4:
     if not st.session_state['logged_in']:
         st.warning("🔒 กรุณาเข้าสู่ระบบเพื่อเข้าถึงฐานข้อมูล")
     else:
-        st.write("### 🗃️ ฐานข้อมูลอุบัติเหตุ (CRUD Management)")
+        st.write("### ฐานข้อมูลอุบัติเหตุ (CRUD Management)")
         
         if df is not None:
             # ค้นหาและแสดงผล
-            search = st.text_input("🔍 ค้นหาข้อมูล (จังหวัด, ช่วงเวลา, ฯลฯ)")
+            search = st.text_input("ค้นหาข้อมูล เช่น จังหวัด, ช่วงเวลา, ฯลฯ")
             if search:
                 filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
                 st.dataframe(filtered_df, use_container_width=True)
@@ -263,10 +262,10 @@ with tab4:
                 
                 c_edit, c_del = st.columns(2)
                 with c_edit:
-                    if st.button("🔄 อัปเดตข้อมูล", use_container_width=True):
+                    if st.button("อัปเดตข้อมูล", use_container_width=True):
                         st.info(f"อัปเดตข้อมูลลำดับที่ {idx_to_edit} แล้ว")
                 with c_del:
-                    if st.button("🗑️ ลบข้อมูลนี้", use_container_width=True, type="primary"):
+                    if st.button("ลบข้อมูล", use_container_width=True, type="primary"):
                         st.error(f"ลบข้อมูลลำดับที่ {idx_to_edit} แล้ว")
         else:
             st.error("ไม่สามารถจัดการข้อมูลได้เนื่องจากไม่มีข้อมูล")
