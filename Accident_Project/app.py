@@ -150,22 +150,18 @@ with tab1:
         
         st.markdown("<br>", unsafe_allow_html=True)
         col_g1, col_g2 = st.columns(2)
-        
         with col_g1:
             st.write("**สัดส่วนความรุนแรง**")
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots()
             sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
-            ax.set_ylabel("จำนวน (ครั้ง)")
             st.pyplot(fig)
-            
         with col_g2:
-            st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา**")
+            st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา (ไล่สี)**")
             if 'ช่วงเวลา' in df.columns:
                 counts = df['ช่วงเวลา'].value_counts()
-                fig2, ax2 = plt.subplots(figsize=(6, 4))
+                fig2, ax2 = plt.subplots()
                 pal = sns.color_palette("Blues_r", len(counts))
                 sns.barplot(y=counts.index, x=counts.values, palette=pal, ax=ax2)
-                ax2.set_xlabel("จำนวน (ครั้ง)")
                 st.pyplot(fig2)
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
