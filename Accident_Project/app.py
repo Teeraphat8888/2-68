@@ -248,11 +248,15 @@ with tab4:
             
             with col_c:
                 st.write("#### ➕ เพิ่มข้อมูลใหม่")
-                with st.form("add_form"):
-                    new_prov = st.text_input("จังหวัด")
-                    new_time = st.selectbox("ช่วงเวลาเกิดเหตุ", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
-                    if st.form_submit_button("บันทึกข้อมูล"):
-                        st.toast("บันทึกข้อมูลสำเร็จ! (โหมดจำลอง)")
+                with st.form("create_form"):
+                    new_prov = st.selectbox("จังหวัด", ["นครศรีธรรมราช", "สุราษฎร์ธานี", "ภูเก็ต", "กระบี่", "พังงา", "ระนอง", "ชุมพร"])
+                    new_time = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
+                    new_lat = st.number_input("ละติจูด (LATITUDE)", value=8.4333, format="%.6f")
+                    new_lon = st.number_input("ลองจิจูด (LONGITUDE)", value=99.9667, format="%.6f")
+                    
+                    submit_create = st.form_submit_button("บันทึกข้อมูล")
+                    if submit_create:
+                        st.toast(f"บันทึกข้อมูลอุบัติเหตุที่ {new_prov} สำเร็จ!")
             
             with col_ud:
                 st.write("#### ✏️ แก้ไข หรือ ลบข้อมูล")
