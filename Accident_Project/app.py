@@ -90,7 +90,7 @@ if 'show_login' not in st.session_state:
 
 with st.sidebar:
     st.image("Accident_Project/download.png", width=100)
-    st.title("สำหรับผู้ดูแลระบบ")
+    st.title("สำหรับผู้ดูแลระบบf")
     
     if not st.session_state['logged_in']:
         if not st.session_state['show_login']:
@@ -136,9 +136,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "จัดการข้อมูล "
 ])
 
-# ------------------------------------------
-# TAB 1: สถิติ (Overview)
-# ------------------------------------------
+
 # ------------------------------------------
 # TAB 1: สถิติ (Overview)
 # ------------------------------------------
@@ -192,12 +190,28 @@ with tab1:
 # TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    if df is not None:
-        st.subheader("จุดเกิดเหตุอุบัติเหตุในพื้นที่")
-        map_df = df[['LATITUDE', 'LONGITUDE']].rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
-        st.map(map_df)
+    st.header("แผนที่จุดเสี่ยงอุบัติเหตุ (Accident Hotspots)")
+    if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+        map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
+        map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
+        
+        if 'ระดับความเสี่ยง' in map_data.columns:
+            risk_filter = st.radio(
+                "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
+                ("แสดงทั้งหมด", "🔴 เฉพาะความเสี่ยงสูง", "🟢 เฉพาะความเสี่ยงต่ำ"),
+                horizontal=True,
+                key="map_filter" # ใส่ key ป้องกัน warning
+            )
+            
+            if risk_filter == "🔴 เฉพาะความเสี่ยงสูง":
+                map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงสูง']
+            elif risk_filter == "🟢 เฉพาะความเสี่ยงต่ำ":
+                map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']
+                
+        st.write(f"แสดงข้อมูลจำนวน: **{len(map_data):,}** จุดเกิดเหตุ")
+        st.map(map_data[['lat', 'lon']], zoom=7)
     else:
-        st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
+        st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE)")
 
 # ------------------------------------------
 # TAB 3: ทำนายผล (Prediction)
