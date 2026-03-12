@@ -248,7 +248,7 @@ with tab3:
         col_input, col_result = st.columns([1, 1])
         
         with col_input:
-            st.subheader("📝 กรอกข้อมูลเพื่อประเมินความเสี่ยง")
+            st.subheader("ผลทำนายจากโมเดล (ML Prediction)")
             with st.form("rule_based_form"):
                 time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
                 weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
