@@ -230,7 +230,7 @@ with tab2:
 with tab3:
     st.header("ทดสอบระบบทำนายด้วย Machine Learning")
     
-    # เพิ่มกล่องข้อความแสดงหลักเกณฑ์ที่ใช้ในการแบ่งระดับความเสี่ยง
+    # กล่องข้อความแสดงหลักเกณฑ์ที่ใช้ในการแบ่งระดับความเสี่ยง
     st.markdown("""
     <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 6px solid #1E3A8A; margin-bottom: 20px; box-shadow: 2px 2px 8px rgba(0,0,0,0.05);">
         <p style="margin: 0; font-size: 16px; font-weight: bold; color: #1E3A8A;">📋 หลักเกณฑ์การจัดระดับความเสี่ยงของอุบัติเหตุ (Target Definition):</p>
@@ -260,6 +260,7 @@ with tab3:
                         "พลิกคว่ำ/ตกถนนในทางโค้ง", "ชนสิ่งกีดขวาง (บนผิวจราจร)", "ไม่ระบุ"
                     ])
                     
+                    st.markdown("**ยานพาหนะที่เกี่ยวข้อง**")
                     col_n1, col_n2 = st.columns(2)
                     with col_n1:
                         motorcycle = st.number_input("รถจักรยานยนต์ (คัน)", min_value=0, max_value=10, value=1)
@@ -268,18 +269,30 @@ with tab3:
                         pickup = st.number_input("รถปิคอัพ (คัน)", min_value=0, max_value=10, value=0)
                         pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
                     
+                    st.markdown("**จำนวนผู้บาดเจ็บและเสียชีวิต**")
+                    col_inj1, col_inj2, col_inj3 = st.columns(3)
+                    with col_inj1:
+                        minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj2:
+                        severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj3:
+                        fatalities = st.number_input("เสียชีวิต (คน)", min_value=0, max_value=50, value=0)
+                    
                     submitted = st.form_submit_button("วิเคราะห์ความเสี่ยง (รันโมเดล) 🔍")
 
             with col_result:
                 st.subheader("📊 ผลลัพธ์จากโมเดล")
                 
                 if submitted:
-                    # เตรียมข้อมูลสำหรับเข้าโมเดล
+                    # เตรียมข้อมูลสำหรับเข้าโมเดล (เพิ่มตัวแปรผู้บาดเจ็บ/เสียชีวิตให้ตรงกับฟอร์ม)
                     input_dict = {
                         'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
                         'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
                         'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
-                        'ลักษณะการเกิดเหตุ': [accident_type]
+                        'ลักษณะการเกิดเหตุ': [accident_type],
+                        'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
+                        'ผู้บาดเจ็บสาหัส': [severe_inj],
+                        'ผู้เสียชีวิต': [fatalities]
                     }
                     input_df = pd.DataFrame(input_dict)
                     
@@ -303,7 +316,7 @@ with tab3:
                             st.info("- เฝ้าระวังและปรับปรุงทัศนวิสัยบริเวณถนน\n- ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์")
                     
                     except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาดในการรันโมเดล: กรุณาตรวจสอบว่าข้อมูลคอลัมน์ตอนเทรนโมเดลตรงกับฟอร์มที่กรอกหรือไม่ (Error: {e})")
+                        st.error(f"เกิดข้อผิดพลาดในการรันโมเดล: กรุณาตรวจสอบว่าชื่อคอลัมน์ตอนเทรนโมเดลตรงกับฟอร์มที่กรอกหรือไม่ (Error: {e})")
                 else:
                     st.write("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มเพื่อรันโมเดลทำนาย")
 
