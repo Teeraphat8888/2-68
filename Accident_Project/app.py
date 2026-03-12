@@ -196,20 +196,31 @@ with tab2:
         map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
         
         if 'ระดับความเสี่ยง' in map_data.columns:
+            # 1. สร้างคอลัมน์ 'color' เพื่อกำหนดรหัสสีตามระดับความเสี่ยง
+            # เสี่ยงสูงใช้สีแดง (#FF2B2B) เสี่ยงต่ำใช้สีเขียว (#09AB3B)
+            color_mapping = {'เสี่ยงสูง': '#FF2B2B', 'เสี่ยงต่ำ': '#09AB3B'}
+            map_data['color'] = map_data['ระดับความเสี่ยง'].map(color_mapping)
+            
+            # จัดการกรณีข้อมูลว่าง (ถ้ามี) ให้เป็นสีเทา
+            map_data['color'] = map_data['color'].fillna('#808080')
+
             risk_filter = st.radio(
                 "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
                 ("แสดงทั้งหมด", "🔴 เฉพาะความเสี่ยงสูง", "🟢 เฉพาะความเสี่ยงต่ำ"),
                 horizontal=True,
-                key="map_filter" # ใส่ key ป้องกัน warning
+                key="map_filter" 
             )
             
+            # 2. กรองข้อมูลตามที่ผู้ใช้เลือก
             if risk_filter == "🔴 เฉพาะความเสี่ยงสูง":
                 map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงสูง']
             elif risk_filter == "🟢 เฉพาะความเสี่ยงต่ำ":
                 map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']
                 
         st.write(f"แสดงข้อมูลจำนวน: **{len(map_data):,}** จุดเกิดเหตุ")
-        st.map(map_data[['lat', 'lon']], zoom=7)
+        
+        # 3. แสดงผลแผนที่โดยระบุพารามิเตอร์ color และส่งข้อมูลเข้าไปทั้ง DataFrame
+        st.map(map_data, latitude='lat', longitude='lon', color='color', zoom=7)
     else:
         st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE)")
 
@@ -218,6 +229,17 @@ with tab2:
 # ------------------------------------------
 with tab3:
     st.header("ทดสอบระบบทำนายด้วย Machine Learning")
+    
+    # เพิ่มกล่องข้อความแสดงหลักเกณฑ์ที่ใช้ในการแบ่งระดับความเสี่ยง
+    st.markdown("""
+    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px; border-left: 6px solid #1E3A8A; margin-bottom: 20px; box-shadow: 2px 2px 8px rgba(0,0,0,0.05);">
+        <p style="margin: 0; font-size: 16px; font-weight: bold; color: #1E3A8A;">📋 หลักเกณฑ์การจัดระดับความเสี่ยงของอุบัติเหตุ (Target Definition):</p>
+        <ul style="margin-top: 8px; margin-bottom: 0; font-size: 15px; color: #444;">
+            <li><b>🔴 ระดับความเสี่ยงสูง:</b> มีผู้เสียชีวิต ≥ 1 คน <i>หรือ</i> ผู้บาดเจ็บสาหัส ≥ 2 คน <i>หรือ</i> ผู้บาดเจ็บเล็กน้อย ≥ 5 คน</li>
+            <li><b>🟢 ระดับความเสี่ยงต่ำ:</b> ผู้บาดเจ็บสาหัส = 1 คน <i>หรือ</i> ผู้บาดเจ็บเล็กน้อย ≤ 4 คน <i>หรือ</i> ไม่มีผู้บาดเจ็บเลย</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
     
     if not st.session_state['logged_in']:
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
@@ -252,6 +274,7 @@ with tab3:
                 st.subheader("📊 ผลลัพธ์จากโมเดล")
                 
                 if submitted:
+                    # เตรียมข้อมูลสำหรับเข้าโมเดล
                     input_dict = {
                         'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
                         'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
@@ -260,21 +283,27 @@ with tab3:
                     }
                     input_df = pd.DataFrame(input_dict)
                     
-                    input_dummies = pd.get_dummies(input_df)
-                    input_final = input_dummies.reindex(columns=feature_cols, fill_value=0)
-                    input_scaled = scaler.transform(input_final)
-                    prediction = model.predict(input_scaled)[0]
+                    try:
+                        # แปลงข้อมูลและทำนายผล
+                        input_dummies = pd.get_dummies(input_df)
+                        input_final = input_dummies.reindex(columns=feature_cols, fill_value=0)
+                        input_scaled = scaler.transform(input_final)
+                        prediction = model.predict(input_scaled)[0]
+                        
+                        # แสดงผลลัพธ์
+                        if prediction == 1: 
+                            st.error("### 🔴 ระดับความเสี่ยงสูง (High Risk)")
+                            st.write("โมเดลวิเคราะห์ว่า **มีแนวโน้มสูงที่จะเกิดการบาดเจ็บสาหัสหรือเสียชีวิต**")
+                            st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
+                            st.info("- แจ้งเตือนศูนย์การแพทย์ฉุกเฉิน (EMS) ให้เตรียมรถกู้ชีพขั้นสูง\n- เสนอแนะจุดกวดขันวินัยจราจรในพื้นที่พิกัดนี้")
+                        else:
+                            st.success("### 🟢 ระดับความเสี่ยงต่ำ (Low Risk)")
+                            st.write("โมเดลวิเคราะห์ว่า **มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือทรัพย์สินเสียหาย**")
+                            st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
+                            st.info("- เฝ้าระวังและปรับปรุงทัศนวิสัยบริเวณถนน\n- ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์")
                     
-                    if prediction == 1: 
-                        st.error("### 🔴ระดับความเสี่ยงสูง (High Risk)")
-                        st.write("โมเดลวิเคราะห์ว่า **มีแนวโน้มสูงที่จะเกิดการบาดเจ็บสาหัสหรือเสียชีวิต**")
-                        st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
-                        st.info("- แจ้งเตือนศูนย์การแพทย์ฉุกเฉิน (EMS) ให้เตรียมรถกู้ชีพขั้นสูง\n- เสนอแนะจุดกวดขันวินัยจราจรในพื้นที่พิกัดนี้")
-                    else:
-                        st.success("### 🟢ระดับความเสี่ยงต่ำ (Low Risk)")
-                        st.write("โมเดลวิเคราะห์ว่า **มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือทรัพย์สินเสียหาย**")
-                        st.markdown("#### 💡 ข้อเสนอแนะเชิงนโยบาย")
-                        st.info("- เฝ้าระวังและปรับปรุงทัศนวิสัยบริเวณถนน\n- ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์")
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดในการรันโมเดล: กรุณาตรวจสอบว่าข้อมูลคอลัมน์ตอนเทรนโมเดลตรงกับฟอร์มที่กรอกหรือไม่ (Error: {e})")
                 else:
                     st.write("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มเพื่อรันโมเดลทำนาย")
 
