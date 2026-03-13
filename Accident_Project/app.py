@@ -190,39 +190,67 @@ with tab1:
 # TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    st.header("แผนที่จุดเสี่ยงอุบัติเหตุ (Accident Hotspots)")
+    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยง (Accident Hotspots)")
+    st.write("🎯 **นิยามจุดเสี่ยง:** บริเวณที่มีอุบัติเหตุเกิดขึ้น **ตั้งแต่ 5 ครั้งขึ้นไป ในรัศมี 500 เมตร**")
+    
     if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
         map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
         map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
         
-        if 'ระดับความเสี่ยง' in map_data.columns:
-            # 1. สร้างคอลัมน์ 'color' เพื่อกำหนดรหัสสีตามระดับความเสี่ยง
-            # เสี่ยงสูงใช้สีแดง (#FF2B2B) เสี่ยงต่ำใช้สีเขียว (#09AB3B)
-            color_mapping = {'เสี่ยงสูง': '#FF2B2B', 'เสี่ยงต่ำ': '#09AB3B'}
-            map_data['color'] = map_data['ระดับความเสี่ยง'].map(color_mapping)
+        try:
+            from sklearn.cluster import DBSCAN
+            import numpy as np
             
-            # จัดการกรณีข้อมูลว่าง (ถ้ามี) ให้เป็นสีเทา
-            map_data['color'] = map_data['color'].fillna('#808080')
-
-            risk_filter = st.radio(
-                "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
-                ("แสดงทั้งหมด", "🔴 เฉพาะความเสี่ยงสูง", "🟢 เฉพาะความเสี่ยงต่ำ"),
-                horizontal=True,
-                key="map_filter" 
+            # 1. แปลงพิกัดเป็น Radians สำหรับคำนวณระยะทางบนความโค้งของโลก (Haversine)
+            coords = np.radians(map_data[['lat', 'lon']].values)
+            
+            # 2. กำหนดรัศมี 500 เมตร (0.5 กิโลเมตร) หารด้วย รัศมีโลก (6371 กม.)
+            kms_per_radian = 6371.0088
+            epsilon = 0.5 / kms_per_radian
+            
+            # 3. ใช้ DBSCAN หา Cluster ที่มีจุด >= 5 จุด ในระยะ 500m
+            db = DBSCAN(eps=epsilon, min_samples=5, algorithm='ball_tree', metric='haversine').fit(coords)
+            map_data['cluster'] = db.labels_
+            
+            # 4. แบ่งกลุ่มข้อมูล (Cluster -1 คือจุดปกติที่กระจายตัวอยู่ ไม่เข้าข่าย Hotspot)
+            map_data['is_hotspot'] = map_data['cluster'] != -1
+            
+            # กำหนดสี: จุดเสี่ยง = สีแดง (#FF0000), จุดปกติ = สีเขียว (#28B463)
+            map_data['color'] = map_data['is_hotspot'].map({True: '#FF0000', False: '#28B463'})
+            
+            # ตัวกรองการแสดงผล
+            filter_opt = st.radio(
+                "รูปแบบการแสดงบนแผนที่:",
+                ("🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)", "🟢 แสดงจุดปกติ", "🌎 แสดงทั้งหมด"),
+                horizontal=True
             )
             
-            # 2. กรองข้อมูลตามที่ผู้ใช้เลือก
-            if risk_filter == "🔴 เฉพาะความเสี่ยงสูง":
-                map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงสูง']
-            elif risk_filter == "🟢 เฉพาะความเสี่ยงต่ำ":
-                map_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']
+            if filter_opt == "🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)":
+                plot_data = map_data[map_data['is_hotspot'] == True]
+            elif filter_opt == "🟢 แสดงจุดปกติ":
+                plot_data = map_data[map_data['is_hotspot'] == False]
+            else:
+                plot_data = map_data
                 
-        st.write(f"แสดงข้อมูลจำนวน: **{len(map_data):,}** จุดเกิดเหตุ")
-        
-        # 3. แสดงผลแผนที่โดยระบุพารามิเตอร์ color และส่งข้อมูลเข้าไปทั้ง DataFrame
-        st.map(map_data, latitude='lat', longitude='lon', color='color', zoom=7)
+            # สรุปตัวเลข
+            hotspot_count = len(map_data[map_data['is_hotspot'] == True])
+            cluster_count = map_data['cluster'].nunique() - (1 if -1 in map_data['cluster'].values else 0)
+            
+            col_sum1, col_sum2 = st.columns(2)
+            col_sum1.metric("จำนวนอุบัติเหตุในพื้นที่จุดเสี่ยง", f"{hotspot_count:,} ครั้ง")
+            col_sum2.metric("จำนวนกลุ่มจุดเสี่ยง (Hotspot Zones)", f"{cluster_count:,} โซน")
+            
+            st.write(f"กำลังแสดงข้อมูล **{len(plot_data):,}** จุด บนแผนที่")
+            
+            # 5. พล็อตลงแผนที่
+            st.map(plot_data, latitude='lat', longitude='lon', color='color', zoom=8)
+            
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการคำนวณรัศมีจุดเสี่ยง: {e}")
+            st.map(map_data[['lat', 'lon']]) # แผนที่สำรองกรณีประมวลผลพลาด
+            
     else:
-        st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE)")
+        st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
 
 # ------------------------------------------
 # TAB 3: ทำนายผล (Prediction)
@@ -283,9 +311,6 @@ with tab3:
                             'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
                             'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
                             'ลักษณะการเกิดเหตุ': [accident_type],
-                            'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
-                            'ผู้บาดเจ็บสาหัส': [severe_inj],
-                            'ผู้เสียชีวิต': [fatalities]
                         }
                         input_df = pd.DataFrame(input_dict)
                         
