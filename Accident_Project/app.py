@@ -42,37 +42,62 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def load_data():
-    # ระบบค้นหาไฟล์อัตโนมัติ (รองรับทั้งกรณีมีและไม่มีโฟลเดอร์)
-    file_name = "Data_2Class_V1.csv"
-    if not os.path.exists(file_name) and os.path.exists(f"{file_name}"):
-        file_name = f"{file_name}"
+    # 💡 ให้ Python หาที่อยู่ปัจจุบันของไฟล์ app.py บนเครื่อง
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # รายชื่อไฟล์ที่ระบบจะลองค้นหา
+    possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
+    
+    for filename in possible_filenames:
+        file_path = os.path.join(current_dir, filename)
         
-    if os.path.exists(file_name):
-        try:
-            # ใช้ utf-8-sig เพื่ออ่านภาษาไทยให้สมบูรณ์
-            df = pd.read_csv(file_name, encoding='utf-8-sig')
-            
-            if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
-                df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
-                df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+        if os.path.exists(file_path):
+            try:
+                # ลองอ่านแบบมาตรฐาน (utf-8-sig)
+                df = pd.read_csv(file_path, encoding='utf-8-sig')
                 
-            if 'code_ระดับความเสี่ยง' in df.columns:
-                df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
-            return df
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ CSV: {e}")
-            return None
+                # คลีนข้อมูลพิกัด
+                if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                    df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                    df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                    df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+                    
+                # สร้างคอลัมน์ระดับความเสี่ยง (ถ้ามี code)
+                if 'code_ระดับความเสี่ยง' in df.columns:
+                    df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
+                    
+                return df
+            
+            except UnicodeDecodeError:
+                try:
+                    # ถ้าอ่านไม่ได้ ลองอ่านแบบภาษาไทย Windows (windows-874)
+                    df = pd.read_csv(file_path, encoding='windows-874')
+                    
+                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                        df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+                        
+                    if 'code_ระดับความเสี่ยง' in df.columns:
+                        df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
+                    return df
+                except Exception as e:
+                    st.error(f"🚨 ไฟล์มีปัญหาเรื่องภาษาไทย: {e}")
+                    return None
+            except Exception as e:
+                st.error(f"🚨 อ่านไฟล์ไม่ได้: {e}")
+                return None
+                
     return None
 
 @st.cache_resource
 def load_ml_assets():
-    # ระบบค้นหาไฟล์โมเดลอัตโนมัติ
-    prefix = "" if os.path.exists("best_model.pkl") else ""
+    # ระบบค้นหาไฟล์โมเดลอัตโนมัติ 
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     try:
-        model = joblib.load(f"{prefix}best_model.pkl")
-        scaler = joblib.load(f"{prefix}scaler.pkl")
-        feature_cols = joblib.load(f"{prefix}feature_columns.pkl")
+        model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
+        scaler = joblib.load(os.path.join(current_dir, 'scaler.pkl'))
+        feature_cols = joblib.load(os.path.join(current_dir, 'feature_columns.pkl'))
         return model, scaler, feature_cols
     except Exception as e:
         return None, None, None
