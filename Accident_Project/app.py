@@ -218,17 +218,19 @@ with tab2:
             cluster_stats = cluster_stats.rename(columns={'acc_count': 'จำนวนอุบัติเหตุ'})
             cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # กำหนดสีโปร่งแสงและขนาดวงกลม
-            color_mapping = {'เสี่ยงสูง': '#FF2B2B60', 'เสี่ยงต่ำ': '#09AB3B60'}
+            # 💡 เอา 60 ด้านหลังออก เพื่อให้สีกลับมาทึบ 100% เหมือนเดิม
+            color_mapping = {'เสี่ยงสูง': '#FF2B2B', 'เสี่ยงต่ำ': '#09AB3B'}
             cluster_stats['color'] = cluster_stats['ระดับความเสี่ยง'].map(color_mapping)
-            cluster_stats['map_size'] = 500 # ปรับขนาดให้ใหญ่กำลังดีเหมือนในภาพ
+            
+            # กำหนดขนาดวงกลม
+            cluster_stats['map_size'] = 500 
             
             # 3. คำนวณตัวเลขสรุป (Metrics) เพื่อแสดงด้านบนสุด
             high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
             low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
             total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
             
-            # === แสดงผล UI ตามรูปแบบที่ต้องการ ===
+            # === แสดงผล UI ===
             
             # ส่วนที่ 1: กล่องตัวเลข
             col_sum1, col_sum2, col_sum3 = st.columns(3)
