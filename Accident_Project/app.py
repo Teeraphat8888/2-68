@@ -368,15 +368,6 @@ with tab3:
                         pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
                         pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
                     
-                    st.markdown("**ข้อมูลผู้บาดเจ็บและเสียชีวิต**")
-                    col_inj1, col_inj2, col_inj3 = st.columns(3)
-                    with col_inj1:
-                        minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", min_value=0, max_value=50, value=0)
-                    with col_inj2:
-                        severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", min_value=0, max_value=50, value=0)
-                    with col_inj3:
-                        fatalities = st.number_input("เสียชีวิต (คน)", min_value=0, max_value=50, value=0)
-                    
                     submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
 
             with col_result:
