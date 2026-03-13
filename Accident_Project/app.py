@@ -167,36 +167,58 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ------------------------------------------
 with tab1:
     if df is not None:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("จำนวนอุบัติเหตุทั้งหมด", f"{len(df):,} ครั้ง")
-        if 'ระดับความเสี่ยง' in df.columns:
-            c2.metric("เสี่ยงสูง (High Risk) 🔴", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงสูง']):,} ครั้ง")
-            c3.metric("เสี่ยงต่ำ (Low Risk) 🟢", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงต่ำ']):,} ครั้ง")
+        st.markdown("### 📊 ภาพรวมสถิติอุบัติเหตุทางถนน")
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        # --- ส่วนที่ 1: กล่องตัวเลขสรุป (KPI Metrics) ---
+        col1, col2, col3, col4 = st.columns(4)
+        
+        total_acc = len(df)
+        high_risk = len(df[df['ระดับความเสี่ยง'] == 'เสี่ยงสูง']) if 'ระดับความเสี่ยง' in df.columns else 0
+        low_risk = len(df[df['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']) if 'ระดับความเสี่ยง' in df.columns else 0
+        total_dead = int(df['ผู้เสียชีวิต'].sum()) if 'ผู้เสียชีวิต' in df.columns else 0
+        
+        col1.metric("🚨 จำนวนอุบัติเหตุรวม", f"{total_acc:,} ครั้ง")
+        col2.metric("🔴 เสี่ยงสูง (High Risk)", f"{high_risk:,} ครั้ง")
+        col3.metric("🟢 เสี่ยงต่ำ (Low Risk)", f"{low_risk:,} ครั้ง")
+        col4.metric("💀 ผู้เสียชีวิตรวม", f"{total_dead:,} คน")
+        
+        st.markdown("---")
+        
+        # --- ส่วนที่ 2: กราฟ (Charts) ---
+        st.markdown("#### 📈 วิเคราะห์ปัจจัยการเกิดอุบัติเหตุ")
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
-            st.write("**สัดส่วนความรุนแรง**")
-            fig, ax = plt.subplots(figsize=(6, 4))
+            st.write("**สัดส่วนระดับความเสี่ยง**")
+            fig1, ax1 = plt.subplots(figsize=(6, 4))
             if 'ระดับความเสี่ยง' in df.columns:
-                sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
-                ax.set_ylabel("จำนวน (ครั้ง)")
-                st.pyplot(fig)
+                sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#FF2B2B', '#09AB3B'], ax=ax1, order=['เสี่ยงสูง', 'เสี่ยงต่ำ'])
+                ax1.set_ylabel("จำนวน (ครั้ง)")
+                ax1.set_xlabel("")
+                st.pyplot(fig1)
             else:
-                st.info("ไม่พบคอลัมน์ระดับความเสี่ยงในชุดข้อมูล")
+                st.info("ไม่พบคอลัมน์ 'ระดับความเสี่ยง'")
             
         with col_g2:
-            st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา**")
+            st.write("**ช่วงเวลาที่เกิดอุบัติเหตุบ่อยที่สุด**")
             if 'ช่วงเวลา' in df.columns:
                 counts = df['ช่วงเวลา'].value_counts()
                 fig2, ax2 = plt.subplots(figsize=(6, 4))
                 pal = sns.color_palette("Blues_r", len(counts))
-                sns.barplot(y=counts.index, x=counts.values, palette=pal, ax=ax2)
-                ax2.set_xlabel("จำนวน (ครั้ง)")
+                sns.barplot(x=counts.index, y=counts.values, palette=pal, ax=ax2)
+                ax2.set_ylabel("จำนวน (ครั้ง)")
+                ax2.set_xlabel("")
                 st.pyplot(fig2)
             else:
-                st.info("ไม่พบคอลัมน์ช่วงเวลาในชุดข้อมูล")
+                st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")
+                
+        st.markdown("---")
+        
+        # --- ส่วนที่ 3: ตารางข้อมูลดิบ ---
+        st.markdown("#### 📋 ข้อมูลรายละเอียด (Raw Data)")
+        st.dataframe(df.head(100), use_container_width=True)
+        st.caption(f"💡 กำลังแสดงผล 100 รายการแรก จากข้อมูลทั้งหมด {total_acc:,} รายการ")
+        
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
