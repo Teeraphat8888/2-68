@@ -219,20 +219,24 @@ with tab2:
             map_data['cluster'] = db.labels_
             
             # 4. สร้าง DataFrame ใหม่ เพื่อยุบรวมจุด 
+            # 💡 แก้ไขปัญหา: ใช้ชื่อ acc_count ในการคำนวณก่อนป้องกัน Error
             cluster_stats = map_data.groupby('cluster').agg(
                 lat=('lat', 'mean'),      
                 lon=('lon', 'mean'),      
-                จำนวนอุบัติเหตุ=('cluster', 'count') # 👈 เปลี่ยนชื่อคอลัมน์ให้เป็นภาษาไทย เพื่อแสดงบนหน้าจอตอนเอาเมาส์ชี้
+                acc_count=('cluster', 'count') 
             ).reset_index()
+            
+            # 💡 แปลงเป็นภาษาไทยเพื่อโชว์ตอนเอาเมาส์ชี้
+            cluster_stats = cluster_stats.rename(columns={'acc_count': 'จำนวนอุบัติเหตุ'})
             
             # 5. จัดระดับความเสี่ยงตามจำนวนอุบัติเหตุ
             cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # 👈 ปรับแก้ 1: กำหนดสีโปร่งแสง (รหัส 60 ท้าย Hex Code คือการลดความทึบลงเหลือประมาณ 40%)
+            # กำหนดสีโปร่งแสง (รหัส 60 ด้านหลังคือความโปร่งแสง)
             color_mapping = {'เสี่ยงสูง': '#FF2B2B60', 'เสี่ยงต่ำ': '#09AB3B60'}
             cluster_stats['color'] = cluster_stats['ระดับความเสี่ยง'].map(color_mapping)
             
-            # 👈 ปรับแก้ 2: บังคับให้ขนาดวงกลม "เท่ากันทั้งหมด"
+            # บังคับให้ขนาดวงกลม "เท่ากันทั้งหมด"
             cluster_stats['map_size'] = 300 
             
             # ตัวกรองการแสดงผล
