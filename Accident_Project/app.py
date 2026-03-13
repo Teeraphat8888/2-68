@@ -44,8 +44,8 @@ st.markdown("""
 def load_data():
     # ระบบค้นหาไฟล์อัตโนมัติ (รองรับทั้งกรณีมีและไม่มีโฟลเดอร์ Accident_Project)
     file_name = "Data_2Class_V1.csv"
-    if not os.path.exists(file_name) and os.path.exists(f"Accident_Project/{file_name}"):
-        file_name = f"Accident_Project/{file_name}"
+    if not os.path.exists(file_name) and os.path.exists(f"{file_name}"):
+        file_name = f"{file_name}"
         
     if os.path.exists(file_name):
         try:
@@ -68,7 +68,7 @@ def load_data():
 @st.cache_resource
 def load_ml_assets():
     # ระบบค้นหาไฟล์โมเดลอัตโนมัติ
-    prefix = "Accident_Project/" if os.path.exists("Accident_Project/best_model.pkl") else ""
+    prefix = "" if os.path.exists("best_model.pkl") else ""
     try:
         model = joblib.load(f"{prefix}best_model.pkl")
         scaler = joblib.load(f"{prefix}scaler.pkl")
