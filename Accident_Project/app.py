@@ -190,8 +190,13 @@ with tab1:
 # TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยง (Accident Hotspots)")
-    st.write("🎯 **นิยามจุดเสี่ยง:** บริเวณที่มีอุบัติเหตุเกิดขึ้น **ตั้งแต่ 5 ครั้งขึ้นไป ในรัศมี 500 เมตร**")
+    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยงอุบัติเหตุ (Spatial Risk Analysis)")
+    
+    st.markdown("""
+    **🎯 เกณฑ์การแบ่งระดับความเสี่ยง (คำนวณทางคณิตศาสตร์แบบ Real-time):**
+    - 🔴 **จุดเสี่ยงสูง (High Risk):** บริเวณที่มีอุบัติเหตุเกิดขึ้น **ตั้งแต่ 5 ครั้งขึ้นไป ในรัศมี 500 เมตร**
+    - 🟢 **จุดเสี่ยงต่ำ (Low Risk):** บริเวณที่มีอุบัติเหตุกระจายตัว **ต่ำกว่า 5 ครั้ง ในรัศมี 500 เมตร**
+    """)
     
     if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
         map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
@@ -201,49 +206,54 @@ with tab2:
             from sklearn.cluster import DBSCAN
             import numpy as np
             
-            # 1. แปลงพิกัดเป็น Radians สำหรับคำนวณระยะทางบนความโค้งของโลก (Haversine)
+            # 1. แปลงพิกัดเป็น Radians สำหรับคำนวณระยะทางบนพื้นผิวโลก (Haversine)
             coords = np.radians(map_data[['lat', 'lon']].values)
             
-            # 2. กำหนดรัศมี 500 เมตร (0.5 กิโลเมตร) หารด้วย รัศมีโลก (6371 กม.)
+            # 2. กำหนดรัศมี 500 เมตร (0.5 กิโลเมตร) 
             kms_per_radian = 6371.0088
             epsilon = 0.5 / kms_per_radian
             
-            # 3. ใช้ DBSCAN หา Cluster ที่มีจุด >= 5 จุด ในระยะ 500m
+            # 3. รัน DBSCAN เพื่อหาจุดที่กระจุกตัว (>= 5 ครั้ง ในรัศมี 500ม.)
             db = DBSCAN(eps=epsilon, min_samples=5, algorithm='ball_tree', metric='haversine').fit(coords)
             map_data['cluster'] = db.labels_
             
-            # 4. แบ่งกลุ่มข้อมูล (Cluster -1 คือจุดปกติที่กระจายตัวอยู่ ไม่เข้าข่าย Hotspot)
-            map_data['is_hotspot'] = map_data['cluster'] != -1
+            # 4. สร้างคอลัมน์ 'ระดับความเสี่ยง' ตามผลการจัดกลุ่ม
+            # cluster != -1 คือจุดเสี่ยงสูง (จับกลุ่มได้), cluster == -1 คือจุดเสี่ยงต่ำ (กระจายตัว ไม่เป็นกลุ่ม)
+            map_data['ระดับความเสี่ยง'] = np.where(map_data['cluster'] != -1, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # กำหนดสี: จุดเสี่ยง = สีแดง (#FF0000), จุดปกติ = สีเขียว (#28B463)
-            map_data['color'] = map_data['is_hotspot'].map({True: '#FF0000', False: '#28B463'})
+            # 5. กำหนดสี: เสี่ยงสูง = แดง, เสี่ยงต่ำ = เขียว
+            color_mapping = {'เสี่ยงสูง': '#FF2B2B', 'เสี่ยงต่ำ': '#09AB3B'}
+            map_data['color'] = map_data['ระดับความเสี่ยง'].map(color_mapping)
             
             # ตัวกรองการแสดงผล
             filter_opt = st.radio(
-                "รูปแบบการแสดงบนแผนที่:",
-                ("🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)", "🟢 แสดงจุดปกติ", "🌎 แสดงทั้งหมด"),
+                "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
+                ("🌎 แสดงทั้งหมด", "🔴 เฉพาะจุดเสี่ยงสูง", "🟢 เฉพาะจุดเสี่ยงต่ำ"),
                 horizontal=True
             )
             
-            if filter_opt == "🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)":
-                plot_data = map_data[map_data['is_hotspot'] == True]
-            elif filter_opt == "🟢 แสดงจุดปกติ":
-                plot_data = map_data[map_data['is_hotspot'] == False]
+            if filter_opt == "🔴 เฉพาะจุดเสี่ยงสูง":
+                plot_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงสูง']
+            elif filter_opt == "🟢 เฉพาะจุดเสี่ยงต่ำ":
+                plot_data = map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']
             else:
                 plot_data = map_data
                 
             # สรุปตัวเลข
-            hotspot_count = len(map_data[map_data['is_hotspot'] == True])
+            high_risk_count = len(map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
+            low_risk_count = len(map_data[map_data['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
             cluster_count = map_data['cluster'].nunique() - (1 if -1 in map_data['cluster'].values else 0)
             
-            col_sum1, col_sum2 = st.columns(2)
-            col_sum1.metric("จำนวนอุบัติเหตุในพื้นที่จุดเสี่ยง", f"{hotspot_count:,} ครั้ง")
-            col_sum2.metric("จำนวนกลุ่มจุดเสี่ยง (Hotspot Zones)", f"{cluster_count:,} โซน")
+            st.markdown("---")
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            col_sum1.metric("🔴 จำนวนอุบัติเหตุจุดเสี่ยงสูง", f"{high_risk_count:,} ครั้ง")
+            col_sum2.metric("🟢 จำนวนอุบัติเหตุจุดเสี่ยงต่ำ", f"{low_risk_count:,} ครั้ง")
+            col_sum3.metric("🚨 โซนเสี่ยงสูงที่พบ (Hotspot Zones)", f"{cluster_count:,} โซน")
             
-            st.write(f"กำลังแสดงข้อมูล **{len(plot_data):,}** จุด บนแผนที่")
+            st.write(f"แสดงข้อมูลจำนวน: **{len(plot_data):,}** จุด")
             
-            # 5. พล็อตลงแผนที่
-            st.map(plot_data, latitude='lat', longitude='lon', color='color', zoom=8)
+            # 6. พล็อตลงแผนที่
+            st.map(plot_data, latitude='lat', longitude='lon', color='color', zoom=7)
             
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการคำนวณรัศมีจุดเสี่ยง: {e}")
