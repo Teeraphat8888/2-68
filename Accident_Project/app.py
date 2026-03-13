@@ -226,14 +226,7 @@ with tab1:
 # TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยงอุบัติเหตุ (Spatial Risk Analysis)")
-    
-    st.markdown("""
-    **🎯 เกณฑ์การจัดกลุ่มจุดเสี่ยง (รัศมี 500 เมตร):**
-    - 🔴 **จุดเสี่ยงสูง (High Risk):** จุดกึ่งกลางของบริเวณที่มีอุบัติเหตุ **รวมกันตั้งแต่ 5 ครั้งขึ้นไป**
-    - 🟢 **จุดเสี่ยงต่ำ (Low Risk):** จุดกึ่งกลางของบริเวณที่มีอุบัติเหตุ **รวมกันต่ำกว่า 5 ครั้ง**
-    *(💡 ลองนำเมาส์ไปชี้ที่วงกลมบนแผนที่ ระบบจะแสดงจำนวนอุบัติเหตุที่ซ่อนอยู่ในจุดนั้นๆ)*
-    """)
+    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยงอุบัติเหตุ")
     
     if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
         map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
@@ -242,36 +235,47 @@ with tab2:
         try:
             from sklearn.cluster import DBSCAN
             import numpy as np
+            import pydeck as pdk 
             
-            # 1. แปลงพิกัดเป็น Radians สำหรับคำนวณระยะทางบนความโค้งของโลก
+            # 1. คำนวณระยะทางและจัดกลุ่ม DBSCAN
             coords = np.radians(map_data[['lat', 'lon']].values)
-            
-            # 2. กำหนดรัศมี 500 เมตร (0.5 กิโลเมตร) 
             kms_per_radian = 6371.0088
             epsilon = 0.5 / kms_per_radian
             
-            # 3. รัน DBSCAN (ใช้ min_samples=1 เพื่อบังคับให้ทุกจุดถูกจัดกลุ่ม)
             db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(coords)
             map_data['cluster'] = db.labels_
             
-            # 4. สร้าง DataFrame ใหม่ เพื่อยุบรวมจุด 
+            # 2. ยุบรวมจุดและนับจำนวน
             cluster_stats = map_data.groupby('cluster').agg(
                 lat=('lat', 'mean'),      
                 lon=('lon', 'mean'),      
-                จำนวนอุบัติเหตุ=('cluster', 'count') # 👈 เปลี่ยนชื่อคอลัมน์ให้เป็นภาษาไทย เพื่อแสดงบนหน้าจอตอนเอาเมาส์ชี้
+                acc_count=('cluster', 'count') 
             ).reset_index()
             
-            # 5. จัดระดับความเสี่ยงตามจำนวนอุบัติเหตุ
+            cluster_stats = cluster_stats.rename(columns={'acc_count': 'จำนวนอุบัติเหตุ'})
             cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # 👈 ปรับแก้ 1: กำหนดสีโปร่งแสง (รหัส 60 ท้าย Hex Code คือการลดความทึบลงเหลือประมาณ 40%)
-            color_mapping = {'เสี่ยงสูง': '#FF2B2B60', 'เสี่ยงต่ำ': '#09AB3B60'}
-            cluster_stats['color'] = cluster_stats['ระดับความเสี่ยง'].map(color_mapping)
+            # 3. กำหนดสีขอบและสีพื้น
+            cluster_stats['fill_color'] = cluster_stats['ระดับความเสี่ยง'].apply(
+                lambda x: [255, 43, 43, 80] if x == 'เสี่ยงสูง' else [9, 171, 59, 80]
+            )
+            cluster_stats['line_color'] = cluster_stats['ระดับความเสี่ยง'].apply(
+                lambda x: [255, 43, 43, 255] if x == 'เสี่ยงสูง' else [9, 171, 59, 255]
+            )
             
-            # 👈 ปรับแก้ 2: บังคับให้ขนาดวงกลม "เท่ากันทั้งหมด"
-            cluster_stats['map_size'] = 300 
+            # 4. คำนวณตัวเลขสรุป (Metrics)
+            high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
+            low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
+            total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
             
-            # ตัวกรองการแสดงผล
+            # === แสดงผล UI ===
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            col_sum1.metric("🔴 จุดเสี่ยงสูง (High Risk Zones)", f"{high_risk_zones:,} โซน")
+            col_sum2.metric("🟢 จุดเสี่ยงต่ำ (Low Risk Zones)", f"{low_risk_zones:,} โซน")
+            col_sum3.metric("📊 ครอบคลุมจำนวนอุบัติเหตุ", f"{total_accidents_mapped:,} ครั้ง")
+            
+            st.markdown("---")
+            
             filter_opt = st.radio(
                 "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
                 ("🌎 แสดงทั้งหมด", "🔴 เฉพาะจุดเสี่ยงสูง (≥ 5 ครั้ง)", "🟢 เฉพาะจุดเสี่ยงต่ำ (< 5 ครั้ง)"),
@@ -285,25 +289,52 @@ with tab2:
             else:
                 plot_data = cluster_stats
                 
-            # สรุปตัวเลข
-            high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
-            low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
-            total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
-            
-            st.markdown("---")
-            col_sum1, col_sum2, col_sum3 = st.columns(3)
-            col_sum1.metric("🔴 จุดเสี่ยงสูง (High Risk Zones)", f"{high_risk_zones:,} โซน")
-            col_sum2.metric("🟢 จุดเสี่ยงต่ำ (Low Risk Zones)", f"{low_risk_zones:,} โซน")
-            col_sum3.metric("📊 ครอบคลุมจำนวนอุบัติเหตุ", f"{total_accidents_mapped:,} ครั้ง")
-            
             st.write(f"กำลังแสดงจุดศูนย์กลางบนแผนที่: **{len(plot_data):,}** โซน")
             
-            # 6. พล็อตลงแผนที่
-            st.map(plot_data, latitude='lat', longitude='lon', color='color', size='map_size', zoom=7)
+            # 5. สร้างเลเยอร์แผนที่แบบ PyDeck
+            layer = pdk.Layer(
+                'ScatterplotLayer',
+                data=plot_data,
+                get_position='[lon, lat]',
+                get_radius=500,               
+                get_fill_color='fill_color',  
+                get_line_color='line_color',  
+                stroked=True,                 
+                filled=True,                  
+                line_width_min_pixels=3,      
+                pickable=True                 
+            )
+
+            # ตั้งค่ามุมมองแผนที่เริ่มต้น
+            view_state = pdk.ViewState(
+                latitude=plot_data['lat'].mean() if len(plot_data) > 0 else 8.4333,
+                longitude=plot_data['lon'].mean() if len(plot_data) > 0 else 99.9667,
+                zoom=7,
+                pitch=0
+            )
+
+            # ตั้งค่ากล่องข้อความ (Tooltip)
+            tooltip = {
+                "html": "<b>ระดับความเสี่ยง:</b> {ระดับความเสี่ยง} <br/> <b>จำนวนอุบัติเหตุ:</b> <span style='color: yellow;'>{จำนวนอุบัติเหตุ}</span> ครั้ง",
+                "style": {
+                    "backgroundColor": "#2C3E50",
+                    "color": "white",
+                    "font-family": "Sarabun, sans-serif",
+                    "border-radius": "8px",
+                    "padding": "10px"
+                }
+            }
+
+            # 💡 แสดงแผนที่ พร้อมเปลี่ยนพื้นหลังเป็นสีสว่าง (map_style='light')
+            st.pydeck_chart(pdk.Deck(
+                map_style='light', # <--- เพิ่มตรงนี้
+                layers=[layer],
+                initial_view_state=view_state,
+                tooltip=tooltip
+            ))
             
         except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการคำนวณและยุบรวมจุดเสี่ยง: {e}")
-            st.map(map_data[['lat', 'lon']]) 
+            st.error(f"เกิดข้อผิดพลาดในการสร้างแผนที่ขั้นสูง: {e}")
             
     else:
         st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
