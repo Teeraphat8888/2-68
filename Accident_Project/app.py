@@ -248,7 +248,7 @@ with tab3:
         col_input, col_result = st.columns([1, 1])
         
         with col_input:
-            st.subheader("ผลทำนายจากโมเดล (ML Prediction)")
+            st.subheader("ทำนายจากโมเดล")
             with st.form("rule_based_form"):
                 time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
                 weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
@@ -281,7 +281,7 @@ with tab3:
             st.subheader("📊 ผลลัพธ์การวิเคราะห์")
             
             if submitted:
-                st.markdown("#### 📋 ประเมินตามหลักเกณฑ์มาตรฐาน")
+                st.markdown("ผลทำนายจากโมเดล (ML Prediction)")
                 
                 # เช็คเงื่อนไขความเสี่ยงสูงตามหลักเกณฑ์
                 is_high_risk_rule = (fatalities >= 1) or (severe_inj >= 2) or (minor_inj >= 5)
