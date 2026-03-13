@@ -26,6 +26,7 @@ st.markdown("""
 @st.cache_data
 def load_data():
     try:
+        # เปลี่ยนชื่อไฟล์ให้ตรงกับข้อมูลของคุณ
         df = pd.read_csv('Data_2Class_V1.csv')
         return df
     except Exception as e:
@@ -34,15 +35,15 @@ def load_data():
 @st.cache_resource
 def load_models():
     try:
-        # โหลดแค่ model และ scaler (ใช้ scaler จำชื่อคอลัมน์แทน feature_columns.pkl)
         model = joblib.load('best_model.pkl')
         scaler = joblib.load('scaler.pkl')
-        return model, scaler
+        feature_cols = joblib.load('feature_columns.pkl')
+        return model, scaler, feature_cols
     except Exception as e:
-        return None, None
+        return None, None, None
 
 df = load_data()
-model, scaler = load_models()
+model, scaler, feature_cols = load_models()
 
 # ==========================================
 # 3. ระบบ Sidebar และ Login
@@ -59,6 +60,7 @@ with st.sidebar:
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         if st.button("Login"):
+            # กำหนดรหัสผ่านแบบง่าย (สามารถเปลี่ยนได้)
             if username == "admin" and password == "1234":
                 st.session_state['logged_in'] = True
                 st.success("เข้าสู่ระบบสำเร็จ!")
@@ -76,6 +78,7 @@ with st.sidebar:
 # ==========================================
 st.title("🚦 ระบบวิเคราะห์และพยากรณ์ความเสี่ยงอุบัติเหตุทางถนน")
 
+# สร้าง Tabs 3 หน้า
 tab1, tab2, tab3 = st.tabs(["📊 ภาพรวมข้อมูล", "🗺️ แผนที่จุดเสี่ยง", "🤖 พยากรณ์ด้วย AI"])
 
 # ------------------------------------------
@@ -86,6 +89,8 @@ with tab1:
     if df is not None:
         total_accidents = len(df)
         st.markdown(f"**จำนวนข้อมูลอุบัติเหตุในระบบ:** {total_accidents:,} รายการ")
+        
+        # แสดงตัวอย่างข้อมูล
         st.dataframe(df.head(10), use_container_width=True)
     else:
         st.warning("⚠️ ไม่พบไฟล์ข้อมูล Data_2Class_V1.csv กรุณาอัปโหลดไฟล์เข้าสู่ระบบ")
@@ -101,6 +106,7 @@ with tab2:
         map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
         
         try:
+            # คำนวณระยะทางและจัดกลุ่มด้วย DBSCAN
             coords = np.radians(map_data[['lat', 'lon']].values)
             kms_per_radian = 6371.0088
             epsilon = 0.5 / kms_per_radian  # รัศมี 500 เมตร
@@ -108,6 +114,7 @@ with tab2:
             db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(coords)
             map_data['cluster'] = db.labels_
             
+            # ยุบรวมจุด (Centroid) และนับจำนวน
             cluster_stats = map_data.groupby('cluster').agg(
                 lat=('lat', 'mean'),      
                 lon=('lon', 'mean'),      
@@ -117,7 +124,7 @@ with tab2:
             cluster_stats = cluster_stats.rename(columns={'acc_count': 'จำนวนอุบัติเหตุ'})
             cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # กำหนดสีขอบ (ทึบ) และสีพื้น (โปร่งแสง)
+            # กำหนดสีขอบและสีพื้นสำหรับวงกลมบนแผนที่
             cluster_stats['fill_color'] = cluster_stats['ระดับความเสี่ยง'].apply(
                 lambda x: [255, 43, 43, 80] if x == 'เสี่ยงสูง' else [9, 171, 59, 80]
             )
@@ -125,17 +132,19 @@ with tab2:
                 lambda x: [255, 43, 43, 255] if x == 'เสี่ยงสูง' else [9, 171, 59, 255]
             )
             
+            # คำนวณตัวเลข Metrics
             high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
             low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
             total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
             
+            # แสดง Metrics
             col_sum1, col_sum2, col_sum3 = st.columns(3)
             col_sum1.metric("🔴 จุดเสี่ยงสูง (High Risk Zones)", f"{high_risk_zones:,} โซน")
             col_sum2.metric("🟢 จุดเสี่ยงต่ำ (Low Risk Zones)", f"{low_risk_zones:,} โซน")
             col_sum3.metric("📊 ครอบคลุมจำนวนอุบัติเหตุ", f"{total_accidents_mapped:,} ครั้ง")
-            
             st.markdown("---")
             
+            # ตัวกรองระดับความเสี่ยง
             filter_opt = st.radio(
                 "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
                 ("🌎 แสดงทั้งหมด", "🔴 เฉพาะจุดเสี่ยงสูง (≥ 5 ครั้ง)", "🟢 เฉพาะจุดเสี่ยงต่ำ (< 5 ครั้ง)"),
@@ -151,6 +160,7 @@ with tab2:
                 
             st.write(f"กำลังแสดงจุดศูนย์กลางบนแผนที่: **{len(plot_data):,}** โซน")
             
+            # สร้าง PyDeck Layer
             layer = pdk.Layer(
                 'ScatterplotLayer',
                 data=plot_data,
@@ -199,8 +209,8 @@ with tab3:
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
         st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบพยากรณ์ความเสี่ยง")
     else:
-        if model is None or scaler is None:
-            st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl` และ `scaler.pkl` อยู่ในระบบ")
+        if model is None or scaler is None or feature_cols is None:
+            st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl`, `scaler.pkl`, และ `feature_columns.pkl` อยู่ในระบบ")
         else:
             col_input, col_result = st.columns([1, 1])
             
@@ -239,6 +249,7 @@ with tab3:
                 
                 if submitted:
                     with st.spinner('กำลังประมวลผลผ่านโมเดล AI...'):
+                        # เตรียมข้อมูลพื้นฐาน (ใส่ LAT/LON กลางเป็นค่าตั้งต้นเพื่อไม่ให้โมเดล Scale เพี้ยน)
                         input_dict = {
                             'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
                             'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
@@ -252,19 +263,16 @@ with tab3:
                         input_df = pd.DataFrame(input_dict)
                         
                         try:
-                            # 1. ดึงชื่อคอลัมน์ที่ถูกต้องมาจากตัว Scaler โดยตรง (แก้บั๊ก!)
-                            correct_features = scaler.feature_names_in_
-                            
-                            # 2. แปลงข้อมูลที่ผู้ใช้กรอกเป็น 1-Hot Encoding
+                            # แปลงข้อมูลแบบ 1-Hot Encoding (pd.get_dummies)
                             input_dummies = pd.get_dummies(input_df)
                             
-                            # 3. จัดคอลัมน์ให้ตรงกับที่ดึงมาจาก Scaler (ถ้าไม่มีคอลัมน์ไหนให้เติม 0)
-                            input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
+                            # จัดคอลัมน์ให้ตรงกับโมเดลตอนสอน (เติม 0 ในคอลัมน์ที่ขาดหายไป)
+                            input_final = input_dummies.reindex(columns=feature_cols, fill_value=0)
                             
-                            # 4. ปรับสเกลข้อมูล
+                            # ปรับสเกลข้อมูล
                             input_scaled = scaler.transform(input_final)
                             
-                            # 5. รันทำนายผล
+                            # รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
                             if prediction == 1: 
