@@ -42,7 +42,7 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def load_data():
-    # ระบบค้นหาไฟล์อัตโนมัติ (รองรับทั้งกรณีมีและไม่มีโฟลเดอร์ Accident_Project)
+    # ระบบค้นหาไฟล์อัตโนมัติ (รองรับทั้งกรณีมีและไม่มีโฟลเดอร์)
     file_name = "Data_2Class_V1.csv"
     if not os.path.exists(file_name) and os.path.exists(f"{file_name}"):
         file_name = f"{file_name}"
@@ -154,9 +154,12 @@ with tab1:
         with col_g1:
             st.write("**สัดส่วนความรุนแรง**")
             fig, ax = plt.subplots(figsize=(6, 4))
-            sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
-            ax.set_ylabel("จำนวน (ครั้ง)")
-            st.pyplot(fig)
+            if 'ระดับความเสี่ยง' in df.columns:
+                sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
+                ax.set_ylabel("จำนวน (ครั้ง)")
+                st.pyplot(fig)
+            else:
+                st.info("ไม่พบคอลัมน์ระดับความเสี่ยงในชุดข้อมูล")
             
         with col_g2:
             st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา**")
@@ -167,6 +170,8 @@ with tab1:
                 sns.barplot(y=counts.index, x=counts.values, palette=pal, ax=ax2)
                 ax2.set_xlabel("จำนวน (ครั้ง)")
                 st.pyplot(fig2)
+            else:
+                st.info("ไม่พบคอลัมน์ช่วงเวลาในชุดข้อมูล")
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
