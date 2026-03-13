@@ -196,7 +196,7 @@ with tab2:
     **🎯 เกณฑ์การจัดกลุ่มจุดเสี่ยง (รัศมี 500 เมตร):**
     - 🔴 **จุดเสี่ยงสูง (High Risk):** จุดกึ่งกลางของบริเวณที่มีอุบัติเหตุ **รวมกันตั้งแต่ 5 ครั้งขึ้นไป**
     - 🟢 **จุดเสี่ยงต่ำ (Low Risk):** จุดกึ่งกลางของบริเวณที่มีอุบัติเหตุ **รวมกันต่ำกว่า 5 ครั้ง**
-    *(หมายเหตุ: ระบบได้ทำการยุบรวมพิกัดอุบัติเหตุที่อยู่ใกล้กันในระยะ 500 เมตร ให้กลายเป็น "จุดเดียว" และขยายขนาดจุดตามจำนวนอุบัติเหตุ เพื่อให้อ่านแผนที่ได้ง่ายขึ้น)*
+    *(💡 ลองนำเมาส์ไปชี้ที่วงกลมบนแผนที่ ระบบจะแสดงจำนวนอุบัติเหตุที่ซ่อนอยู่ในจุดนั้นๆ)*
     """)
     
     if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
@@ -214,26 +214,26 @@ with tab2:
             kms_per_radian = 6371.0088
             epsilon = 0.5 / kms_per_radian
             
-            # 3. รัน DBSCAN (ใช้ min_samples=1 เพื่อบังคับให้ทุกจุดถูกจัดกลุ่ม กลุ่มไหนอยู่เดี่ยวๆ ก็จะเป็นกลุ่มขนาด 1 จุด)
+            # 3. รัน DBSCAN (ใช้ min_samples=1 เพื่อบังคับให้ทุกจุดถูกจัดกลุ่ม)
             db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(coords)
             map_data['cluster'] = db.labels_
             
-            # 4. สร้าง DataFrame ใหม่ เพื่อยุบรวมจุด (หาจุดกึ่งกลางและนับจำนวน)
+            # 4. สร้าง DataFrame ใหม่ เพื่อยุบรวมจุด 
             cluster_stats = map_data.groupby('cluster').agg(
-                lat=('lat', 'mean'),      # หาจุดกึ่งกลางละติจูดของกลุ่ม
-                lon=('lon', 'mean'),      # หาจุดกึ่งกลางลองจิจูดของกลุ่ม
-                count=('cluster', 'count') # นับจำนวนอุบัติเหตุในกลุ่มนั้น
+                lat=('lat', 'mean'),      
+                lon=('lon', 'mean'),      
+                จำนวนอุบัติเหตุ=('cluster', 'count') # 👈 เปลี่ยนชื่อคอลัมน์ให้เป็นภาษาไทย เพื่อแสดงบนหน้าจอตอนเอาเมาส์ชี้
             ).reset_index()
             
-            # 5. จัดระดับความเสี่ยงตามจำนวนอุบัติเหตุของกลุ่มนั้นๆ
-            cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['count'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
+            # 5. จัดระดับความเสี่ยงตามจำนวนอุบัติเหตุ
+            cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
             
-            # กำหนดสี (เสี่ยงสูง = แดง, เสี่ยงต่ำ = เขียว)
-            color_mapping = {'เสี่ยงสูง': '#FF2B2B', 'เสี่ยงต่ำ': '#09AB3B'}
+            # 👈 ปรับแก้ 1: กำหนดสีโปร่งแสง (รหัส 60 ท้าย Hex Code คือการลดความทึบลงเหลือประมาณ 40%)
+            color_mapping = {'เสี่ยงสูง': '#FF2B2B60', 'เสี่ยงต่ำ': '#09AB3B60'}
             cluster_stats['color'] = cluster_stats['ระดับความเสี่ยง'].map(color_mapping)
             
-            # กำหนดขนาดจุดบนแผนที่ (คูณด้วยค่าคงที่เพื่อให้เห็นความแตกต่างของขนาดวงกลม)
-            cluster_stats['map_size'] = cluster_stats['count'] * 25
+            # 👈 ปรับแก้ 2: บังคับให้ขนาดวงกลม "เท่ากันทั้งหมด"
+            cluster_stats['map_size'] = 300 
             
             # ตัวกรองการแสดงผล
             filter_opt = st.radio(
@@ -252,7 +252,7 @@ with tab2:
             # สรุปตัวเลข
             high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
             low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
-            total_accidents_mapped = cluster_stats['count'].sum()
+            total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
             
             st.markdown("---")
             col_sum1, col_sum2, col_sum3 = st.columns(3)
@@ -262,12 +262,12 @@ with tab2:
             
             st.write(f"กำลังแสดงจุดศูนย์กลางบนแผนที่: **{len(plot_data):,}** โซน")
             
-            # 6. พล็อตลงแผนที่ (ส่งข้อมูล size เข้าไปเพื่อปรับขนาดวงกลมตามจำนวน)
+            # 6. พล็อตลงแผนที่
             st.map(plot_data, latitude='lat', longitude='lon', color='color', size='map_size', zoom=7)
             
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการคำนวณและยุบรวมจุดเสี่ยง: {e}")
-            st.map(map_data[['lat', 'lon']]) # แผนที่สำรองกรณีประมวลผลพลาด
+            st.map(map_data[['lat', 'lon']]) 
             
     else:
         st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
