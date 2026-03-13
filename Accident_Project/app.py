@@ -389,9 +389,6 @@ with tab3:
                             'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
                             'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
                             'ลักษณะการเกิดเหตุ': [accident_type],
-                            'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
-                            'ผู้บาดเจ็บสาหัส': [severe_inj],
-                            'ผู้เสียชีวิต': [fatalities],
                             'LATITUDE': [8.4333], 'LONGITUDE': [99.9667] 
                         }
                         input_df = pd.DataFrame(input_dict)
