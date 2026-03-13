@@ -25,12 +25,30 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def load_data():
-    try:
-        # เปลี่ยนชื่อไฟล์ให้ตรงกับข้อมูลของคุณ
-        df = pd.read_csv('Data_2Class_V1.csv')
-        return df
-    except Exception as e:
-        return None
+    # รายชื่อไฟล์ที่ระบบจะลองค้นหา (ดักไว้ให้ทุกกรณี)
+    possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
+    
+    for filename in possible_filenames:
+        try:
+            # 1. ลองอ่านแบบมาตรฐาน (UTF-8)
+            df = pd.read_csv(filename)
+            return df
+        except UnicodeDecodeError:
+            try:
+                # 2. ถ้ามีภาษาไทยแล้ว Error ให้ลองอ่านแบบ Windows (TIS-620/Windows-874)
+                df = pd.read_csv(filename, encoding='windows-874')
+                return df
+            except:
+                pass # ถ้าอ่านไม่ได้ให้ข้ามไปลองชื่อไฟล์ถัดไป
+        except FileNotFoundError:
+            continue # ถ้าหาชื่อนี้ไม่เจอ ให้วนลูปไปหาชื่อถัดไป
+        except Exception as e:
+            st.error(f"🚨 ไฟล์ {filename} มีปัญหา: {e}")
+            return None
+            
+    # ถ้าวนหาจนครบทุกชื่อแล้วยังไม่เจออีก
+    st.error("🚨 ไม่พบไฟล์ข้อมูล! โปรดเช็คในแถบซ้ายมือของ VS Code ว่ามีไฟล์ข้อมูลอยู่ในโฟลเดอร์เดียวกับ app.py แล้วจริงๆ หรือไม่")
+    return None
 
 @st.cache_resource
 def load_models():
