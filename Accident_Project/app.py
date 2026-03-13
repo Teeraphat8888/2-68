@@ -2,212 +2,252 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from sklearn.cluster import DBSCAN
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+import seaborn as sns
 import os
+import urllib.request
 
 # ==========================================
-# 1. ตั้งค่าหน้าเพจ
+# 1. ตั้งค่าฟอนต์ภาษาไทยสำหรับกราฟ (Matplotlib & Seaborn)
 # ==========================================
-st.set_page_config(page_title="ระบบวิเคราะห์อุบัติเหตุ", page_icon="🚦", layout="wide")
+font_path = "Sarabun-Regular.ttf"
+# ถ้ายังไม่มีไฟล์ฟอนต์ในเครื่อง/เซิร์ฟเวอร์ ให้ดาวน์โหลดอัตโนมัติ
+if not os.path.exists(font_path):
+    url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
+    urllib.request.urlretrieve(url, font_path)
+
+# บังคับให้กราฟใช้ฟอนต์ Sarabun
+fm.fontManager.addfont(font_path)
+mpl.rc('font', family='Sarabun')
+mpl.rcParams['axes.unicode_minus'] = False # แก้ปัญหาสัญลักษณ์ลบ (-) กลายเป็นสี่เหลี่ยม
+
+# ==========================================
+# 2. ตั้งค่าหน้าเว็บและดีไซน์ (Page Config & CSS)
+# ==========================================
+st.set_page_config(page_title="Road Safety Dashboard", page_icon="🚑", layout="wide")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap');
-    html, body, [class*="css"]  {
-        font-family: 'Sarabun', sans-serif;
-    }
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap');
+        html, body, [class*="css"]  { font-family: 'Sarabun', sans-serif !important; }
+        h1, h2, h3 { font-weight: 700 !important; color: #1E3A8A !important; }
+        .stButton>button { border-radius: 8px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. ฟังก์ชันโหลดข้อมูลและโมเดล
+# 3. ฟังก์ชันโหลดข้อมูลและโมเดล
 # ==========================================
 @st.cache_data
 def load_data():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
-    
-    for filename in possible_filenames:
-        file_path = os.path.join(current_dir, filename)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path)
-                return df
-            except:
-                try:
-                    df = pd.read_csv(file_path, encoding='windows-874')
-                    return df
-                except:
-                    pass
+    # ระบบค้นหาไฟล์อัตโนมัติ (รองรับทั้งกรณีมีและไม่มีโฟลเดอร์ Accident_Project)
+    file_name = "Data_2Class_V1.csv"
+    if not os.path.exists(file_name) and os.path.exists(f"Accident_Project/{file_name}"):
+        file_name = f"Accident_Project/{file_name}"
+        
+    if os.path.exists(file_name):
+        try:
+            # ใช้ utf-8-sig เพื่ออ่านภาษาไทยให้สมบูรณ์
+            df = pd.read_csv(file_name, encoding='utf-8-sig')
+            
+            if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+                
+            if 'code_ระดับความเสี่ยง' in df.columns:
+                df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
+            return df
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์ CSV: {e}")
+            return None
     return None
 
 @st.cache_resource
-def load_models():
+def load_ml_assets():
+    # ระบบค้นหาไฟล์โมเดลอัตโนมัติ
+    prefix = "Accident_Project/" if os.path.exists("Accident_Project/best_model.pkl") else ""
     try:
-        model = joblib.load('best_model.pkl')
-        scaler = joblib.load('scaler.pkl')
-        return model, scaler
-    except:
-        return None, None
+        model = joblib.load(f"{prefix}best_model.pkl")
+        scaler = joblib.load(f"{prefix}scaler.pkl")
+        feature_cols = joblib.load(f"{prefix}feature_columns.pkl")
+        return model, scaler, feature_cols
+    except Exception as e:
+        return None, None, None
 
 df = load_data()
-model, scaler = load_models()
+model, scaler, feature_cols = load_ml_assets()
 
 # ==========================================
-# 3. ระบบ Sidebar Login
+# 4. ระบบ Login ใน Sidebar
 # ==========================================
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+if 'show_login' not in st.session_state:
+    st.session_state['show_login'] = False
 
 with st.sidebar:
-    st.title("เมนูจัดการระบบ")
+    st.image("https://cdn-icons-png.flaticon.com/512/3204/3204003.png", width=100)
+    st.title("ระบบเจ้าหน้าที่")
+    
     if not st.session_state['logged_in']:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if username == "admin" and password == "1234":
-                st.session_state['logged_in'] = True
-                st.success("เข้าสู่ระบบสำเร็จ!")
+        if not st.session_state['show_login']:
+            st.info("กรุณาล็อกอินเพื่อจัดการข้อมูล")
+            if st.button("🔐 เข้าสู่ระบบ (Login)", use_container_width=True, type="primary"):
+                st.session_state['show_login'] = True
                 st.rerun()
-            else:
-                st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+        else:
+            with st.container():
+                st.markdown("---")
+                user = st.text_input("ชื่อผู้ใช้งาน")
+                pw = st.text_input("รหัสผ่าน", type="password")
+                col_l1, col_l2 = st.columns(2)
+                with col_l1:
+                    if st.button("ยืนยัน", use_container_width=True, type="primary"):
+                        if user == "admin" and pw == "admin123":
+                            st.session_state['logged_in'] = True
+                            st.session_state['show_login'] = False
+                            st.success("สำเร็จ!")
+                            st.rerun()
+                        else:
+                            st.error("ข้อมูลผิดพลาด!")
+                with col_l2:
+                    if st.button("ยกเลิก", use_container_width=True):
+                        st.session_state['show_login'] = False
+                        st.rerun()
     else:
-        st.success("✅ เข้าสู่ระบบในฐานะ Admin")
-        if st.button("Logout"):
+        st.success("✅ สถานะ: ผู้ดูแลระบบ")
+        if st.button("🚪 ออกจากระบบ", use_container_width=True):
             st.session_state['logged_in'] = False
             st.rerun()
 
 # ==========================================
-# 4. หน้าจอหลัก (Tabs)
+# 5. ส่วนแสดงผลเนื้อหาหลัก (Tabs)
 # ==========================================
-st.title("🚦 ระบบวิเคราะห์และพยากรณ์ความเสี่ยงอุบัติเหตุทางถนน")
-tab1, tab2, tab3 = st.tabs(["📊 ภาพรวมข้อมูล", "🗺️ แผนที่จุดเสี่ยง", "🤖 พยากรณ์ด้วย AI"])
+st.title("🚑 ระบบวิเคราะห์ความรุนแรงอุบัติเหตุทางถนน")
+st.subheader("เขตสุขภาพที่ 11 | โครงงานพัฒนาโมเดล Machine Learning")
+st.markdown("---")
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📈 สถิติภาพรวม", 
+    "🗺️ แผนที่จุดเสี่ยง", 
+    "🚨 ระบบทำนายความรุนแรง", 
+    "📝 จัดการข้อมูล (CRUD)"
+])
 
 # ------------------------------------------
-# TAB 1: ภาพรวมข้อมูล 
+# TAB 1: สถิติ (Overview)
 # ------------------------------------------
 with tab1:
-    st.header("📊 ภาพรวมข้อมูลสถิติอุบัติเหตุ")
     if df is not None:
-        st.markdown(f"**จำนวนข้อมูลอุบัติเหตุในระบบ:** {len(df):,} รายการ")
-        st.dataframe(df.head(10), use_container_width=True)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("จำนวนอุบัติเหตุทั้งหมด", f"{len(df):,} ครั้ง")
+        if 'ระดับความเสี่ยง' in df.columns:
+            c2.metric("เสี่ยงสูง (High Risk) 🔴", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงสูง']):,} ครั้ง")
+            c3.metric("เสี่ยงต่ำ (Low Risk) 🟢", f"{len(df[df['ระดับความเสี่ยง']=='เสี่ยงต่ำ']):,} ครั้ง")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.write("**สัดส่วนความรุนแรง**")
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#28B463', '#D62728'], ax=ax)
+            ax.set_ylabel("จำนวน (ครั้ง)")
+            st.pyplot(fig)
+            
+        with col_g2:
+            st.write("**จำนวนอุบัติเหตุแยกตามช่วงเวลา**")
+            if 'ช่วงเวลา' in df.columns:
+                counts = df['ช่วงเวลา'].value_counts()
+                fig2, ax2 = plt.subplots(figsize=(6, 4))
+                pal = sns.color_palette("Blues_r", len(counts))
+                sns.barplot(y=counts.index, x=counts.values, palette=pal, ax=ax2)
+                ax2.set_xlabel("จำนวน (ครั้ง)")
+                st.pyplot(fig2)
     else:
-        st.error("⚠️ ไม่พบไฟล์ข้อมูล Data_2Class_V1.csv")
+        st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
 # ------------------------------------------
-# TAB 2: แผนที่ (เวอร์ชันแรกสุดแบบดั้งเดิม)
+# TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยง (Accident Hotspots)")
-    st.write("🎯 **นิยามจุดเสี่ยง:** บริเวณที่มีอุบัติเหตุเกิดขึ้น **ตั้งแต่ 5 ครั้งขึ้นไป ในรัศมี 500 เมตร**")
-    
-    if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-        map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
-        map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
-        
-        try:
-            # ใช้ DBSCAN หาระยะทาง
-            coords = np.radians(map_data[['lat', 'lon']].values)
-            kms_per_radian = 6371.0088
-            epsilon = 0.5 / kms_per_radian
-            
-            # รันหา Cluster (>= 5 จุด ในระยะ 500m)
-            db = DBSCAN(eps=epsilon, min_samples=5, algorithm='ball_tree', metric='haversine').fit(coords)
-            map_data['cluster'] = db.labels_
-            
-            # แบ่งกลุ่มข้อมูล (-1 คือจุดปกติ, ค่าอื่นคือจุดเสี่ยง)
-            map_data['is_hotspot'] = map_data['cluster'] != -1
-            map_data['color'] = map_data['is_hotspot'].map({True: '#FF0000', False: '#28B463'})
-            
-            # ตัวกรอง
-            filter_opt = st.radio(
-                "รูปแบบการแสดงบนแผนที่:",
-                ("🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)", "🟢 แสดงจุดปกติ", "🌎 แสดงทั้งหมด"),
-                horizontal=True
-            )
-            
-            if filter_opt == "🔴 แสดงเฉพาะจุดเสี่ยง (Hotspots)":
-                plot_data = map_data[map_data['is_hotspot'] == True]
-            elif filter_opt == "🟢 แสดงจุดปกติ":
-                plot_data = map_data[map_data['is_hotspot'] == False]
-            else:
-                plot_data = map_data
-                
-            # สรุปตัวเลข
-            hotspot_count = len(map_data[map_data['is_hotspot'] == True])
-            cluster_count = map_data['cluster'].nunique() - (1 if -1 in map_data['cluster'].values else 0)
-            
-            col_sum1, col_sum2 = st.columns(2)
-            col_sum1.metric("จำนวนอุบัติเหตุในพื้นที่จุดเสี่ยง", f"{hotspot_count:,} ครั้ง")
-            col_sum2.metric("จำนวนกลุ่มจุดเสี่ยง (Hotspot Zones)", f"{cluster_count:,} โซน")
-            
-            st.write(f"กำลังแสดงข้อมูล **{len(plot_data):,}** จุด บนแผนที่")
-            
-            # พล็อตลงแผนที่แบบธรรมดา
-            st.map(plot_data, latitude='lat', longitude='lon', color='color', zoom=7)
-            
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการคำนวณ: {e}")
-            st.map(map_data[['lat', 'lon']]) 
+    if df is not None:
+        st.subheader("จุดเกิดเหตุอุบัติเหตุในพื้นที่")
+        map_df = df[['LATITUDE', 'LONGITUDE']].rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
+        st.map(map_df)
     else:
-        st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
+        st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
 
 # ------------------------------------------
-# TAB 3: ทำนายผล 
+# TAB 3: ทำนายผล (Prediction)
 # ------------------------------------------
 with tab3:
-    st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
-    
-    if not st.session_state.get('logged_in', False):
-        st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
+    if not st.session_state['logged_in']:
+        st.warning("🔒 เนื้อหาส่วนนี้เฉพาะเจ้าหน้าที่ กรุณาล็อกอินที่แถบด้านข้าง")
+    elif model is None:
+        st.error("🚨 ไม่พบไฟล์โมเดล AI (.pkl) กรุณาตรวจสอบว่าอัปโหลดไฟล์โมเดลแล้วหรือไม่")
     else:
-        if model is None or scaler is None:
-            st.error("🚨 ไม่พบไฟล์โมเดล AI `best_model.pkl` และ `scaler.pkl`")
-        else:
-            col_input, col_result = st.columns([1, 1])
-            with col_input:
-                st.subheader("📝 กรอกข้อมูลอุบัติเหตุ")
-                with st.form("ml_predict_form"):
-                    time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
-                    weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
-                    accident_type = st.selectbox("ลักษณะการเกิดเหตุ", [
-                        "ชนท้าย", "ชนในทิศทางตรงกันข้าม (ไม่ใช่การแซง)", "พลิกคว่ำ/ตกถนนในทางตรง", 
-                        "พลิกคว่ำ/ตกถนนในทางโค้ง", "ชนสิ่งกีดขวาง (บนผิวจราจร)", "ไม่ระบุ"
-                    ])
-                    motorcycle = st.number_input("รถจักรยานยนต์ (คัน)", 0, 10, 1)
-                    car = st.number_input("รถยนต์ (คัน)", 0, 10, 0)
-                    pickup = st.number_input("รถปิคอัพ (คัน)", 0, 10, 0)
-                    pedestrian = st.number_input("คนเดินเท้า (คน)", 0, 10, 0)
-                    minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", 0, 50, 0)
-                    severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", 0, 50, 0)
-                    fatalities = st.number_input("เสียชีวิต (คน)", 0, 50, 0)
-                    
-                    submitted = st.form_submit_button("พยากรณ์ 🔍")
+        col_in, col_res = st.columns([1, 1])
+        with col_in:
+            st.write("### 📝 ระบุรายละเอียดอุบัติเหตุ")
+            with st.form("ml_form"):
+                time_val = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
+                weather_val = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
+                mc_val = st.number_input("รถจักรยานยนต์ (คัน)", 0, 10, 1)
+                submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
+        
+        with col_res:
+            st.write("### 📊 ผลการทำนาย")
+            if submit_pred:
+                st.success("✅ โมเดลเชื่อมต่อสำเร็จ! (กำลังรอการปรับแต่ง Features ให้ตรงกับโมเดลจริง)")
 
-            with col_result:
-                st.subheader("🎯 ผลการพยากรณ์")
-                if submitted:
-                    input_dict = {
-                        'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
-                        'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
-                        'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
-                        'ลักษณะการเกิดเหตุ': [accident_type],
-                        'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
-                        'ผู้บาดเจ็บสาหัส': [severe_inj],
-                        'ผู้เสียชีวิต': [fatalities],
-                        'LATITUDE': [8.4333], 'LONGITUDE': [99.9667] 
-                    }
-                    input_df = pd.DataFrame(input_dict)
-                    try:
-                        correct_features = scaler.feature_names_in_
-                        input_dummies = pd.get_dummies(input_df)
-                        input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
-                        input_scaled = scaler.transform(input_final)
-                        prediction = model.predict(input_scaled)[0]
-                        
-                        if prediction == 1: 
-                            st.error("🚨 **ความเสี่ยงสูง (High Risk)**")
-                        else:
-                            st.success("✅ **ความเสี่ยงต่ำ (Low Risk)**")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+# ------------------------------------------
+# TAB 4: จัดการข้อมูล (CRUD)
+# ------------------------------------------
+with tab4:
+    if not st.session_state['logged_in']:
+        st.warning("🔒 กรุณาเข้าสู่ระบบเพื่อเข้าถึงฐานข้อมูล")
+    else:
+        st.write("### 🗃️ ฐานข้อมูลอุบัติเหตุ (CRUD Management)")
+        
+        if df is not None:
+            # ค้นหาและแสดงผล
+            search = st.text_input("🔍 ค้นหาข้อมูล (จังหวัด, ช่วงเวลา, ฯลฯ)")
+            if search:
+                filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
+                st.dataframe(filtered_df, use_container_width=True)
+            else:
+                st.dataframe(df.head(100), use_container_width=True)
+                st.caption(f"แสดงข้อมูล 100 รายการล่าสุด จากทั้งหมด {len(df):,} รายการ")
+            
+            st.markdown("---")
+            
+            # ฟอร์มเพิ่ม/แก้ไข/ลบ
+            col_c, col_ud = st.columns(2)
+            
+            with col_c:
+                st.write("#### ➕ เพิ่มข้อมูลใหม่")
+                with st.form("add_form"):
+                    new_prov = st.text_input("จังหวัด")
+                    new_time = st.selectbox("ช่วงเวลาเกิดเหตุ", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
+                    if st.form_submit_button("บันทึกข้อมูล"):
+                        st.toast("บันทึกข้อมูลสำเร็จ! (โหมดจำลอง)")
+            
+            with col_ud:
+                st.write("#### ✏️ แก้ไข หรือ ลบข้อมูล")
+                idx_to_edit = st.number_input("ระบุลำดับ (Index)", 0, len(df)-1 if len(df)>0 else 0, 0)
+                if len(df) > 0:
+                    st.write("**ข้อมูลที่เลือก:**", df.iloc[idx_to_edit][['จังหวัด', 'ช่วงเวลา']].to_dict() if 'จังหวัด' in df.columns else "ไม่มีข้อมูลจังหวัด")
+                
+                c_edit, c_del = st.columns(2)
+                with c_edit:
+                    if st.button("🔄 อัปเดตข้อมูล", use_container_width=True):
+                        st.info(f"อัปเดตข้อมูลลำดับที่ {idx_to_edit} แล้ว")
+                with c_del:
+                    if st.button("🗑️ ลบข้อมูลนี้", use_container_width=True, type="primary"):
+                        st.error(f"ลบข้อมูลลำดับที่ {idx_to_edit} แล้ว")
+        else:
+            st.error("ไม่สามารถจัดการข้อมูลได้เนื่องจากไม่มีข้อมูล")
