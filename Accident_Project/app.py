@@ -335,6 +335,105 @@ with tab2:
     else:
         st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
 
+
+with tab3:
+    st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
+    st.write("ระบบจะนำข้อมูลที่คุณกรอกไปประมวลผลผ่านโมเดล Machine Learning เพื่อทำนายระดับความรุนแรง")
+    
+    if not st.session_state.get('logged_in', False):
+        st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
+        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบพยากรณ์ความเสี่ยง")
+    else:
+        if model is None or scaler is None:
+            st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl` และ `scaler.pkl` อยู่ในระบบ")
+        else:
+            col_input, col_result = st.columns([1, 1])
+            
+            with col_input:
+                st.subheader("📝 ระบุรายละเอียดอุบัติเหตุ")
+                with st.form("ml_predict_form"):
+                    time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
+                    weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
+                    accident_type = st.selectbox("ลักษณะการเกิดเหตุ", [
+                        "ชนท้าย", "ชนในทิศทางตรงกันข้าม (ไม่ใช่การแซง)", "พลิกคว่ำ/ตกถนนในทางตรง", 
+                        "พลิกคว่ำ/ตกถนนในทางโค้ง", "ชนสิ่งกีดขวาง (บนผิวจราจร)", "ไม่ระบุ"
+                    ])
+                    
+                    st.markdown("**ยานพาหนะที่เกี่ยวข้อง**")
+                    col_n1, col_n2 = st.columns(2)
+                    with col_n1:
+                        motorcycle = st.number_input("รถจักรยานยนต์ (คัน)", min_value=0, max_value=10, value=1)
+                        car = st.number_input("รถยนต์นั่งส่วนบุคคล (คัน)", min_value=0, max_value=10, value=0)
+                    with col_n2:
+                        pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
+                        pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
+                    
+                    st.markdown("**ข้อมูลผู้บาดเจ็บและเสียชีวิต**")
+                    col_inj1, col_inj2, col_inj3 = st.columns(3)
+                    with col_inj1:
+                        minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj2:
+                        severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj3:
+                        fatalities = st.number_input("เสียชีวิต (คน)", min_value=0, max_value=50, value=0)
+                    
+                    submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
+
+            with col_result:
+                st.subheader("🎯 ผลการทำนาย")
+                
+                if submit_pred:
+                    with st.spinner('กำลังประมวลผลผ่านโมเดล AI...'):
+                        input_dict = {
+                            'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
+                            'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
+                            'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
+                            'ลักษณะการเกิดเหตุ': [accident_type],
+                            'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
+                            'ผู้บาดเจ็บสาหัส': [severe_inj],
+                            'ผู้เสียชีวิต': [fatalities],
+                            'LATITUDE': [8.4333], 'LONGITUDE': [99.9667] 
+                        }
+                        input_df = pd.DataFrame(input_dict)
+                        
+                        try:
+                            # 1. ดึงชื่อคอลัมน์จาก Scaler
+                            correct_features = scaler.feature_names_in_
+                            
+                            # 2. แปลงข้อมูล
+                            input_dummies = pd.get_dummies(input_df)
+                            input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
+                            
+                            # 3. ปรับสเกล
+                            input_scaled = scaler.transform(input_final)
+                            
+                            # 4. รันทำนายผล
+                            prediction = model.predict(input_scaled)[0]
+                            
+                            st.markdown("**ระดับความรุนแรงที่พยากรณ์ได้:**")
+                            
+                            if prediction == 1: 
+                                st.warning("### ⚠️ ระดับความเสี่ยงสูง (High Risk)\n**AI ประเมินว่ามีแนวโน้มที่จะเกิดความสูญเสียรุนแรง (บาดเจ็บสาหัสหรือเสียชีวิต)**")
+                                st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
+                                st.markdown("""
+                                - แจ้งศูนย์การแพทย์ฉุกเฉิน (EMS) พื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
+                                - ส่งเจ้าหน้าที่ตำรวจตรวจสอบและจัดการจราจรจุดเกิดเหตุทันทีเพื่อป้องกันอุบัติเหตุซ้ำซ้อน
+                                - เตรียมอุปกรณ์ตัดถ่างและส่องสว่างหากเป็นเวลากลางคืน
+                                """)
+                            else:
+                                st.success("### ✅ ระดับความเสี่ยงต่ำ (Low Risk)\n**AI ประเมินว่ามีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
+                                st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
+                                st.markdown("""
+                                - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์และให้การปฐมพยาบาล
+                                - เคลียร์พื้นที่ผิวจราจรโดยเร็วเพื่อหลีกเลี่ยงการจราจรติดขัด
+                                - บันทึกภาพและเก็บรวบรวมหลักฐานความเสียหาย
+                                """)
+
+                        except Exception as e:
+                            st.error(f"⚠️ เกิดข้อผิดพลาดในการคำนวณของโมเดล:")
+                            st.code(f"Error Details: {e}")
+                else:
+                    st.info("👈 กรอกข้อมูลอุบัติเหตุทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
 # ------------------------------------------
