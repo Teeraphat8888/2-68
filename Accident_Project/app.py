@@ -192,12 +192,7 @@ with tab1:
                 ax2.set_xlabel("")
                 st.pyplot(fig2)
             else:
-                st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")
-                
-        st.markdown("---")
-        st.markdown("#### 📋 ข้อมูลรายละเอียด (Raw Data)")
-        st.dataframe(df.head(100), use_container_width=True)
-        st.caption(f"💡 กำลังแสดงผล 100 รายการแรก จากข้อมูลทั้งหมด {total_acc:,} รายการ")
+                st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")  
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
