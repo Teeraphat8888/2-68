@@ -243,13 +243,7 @@ with tab3:
                         presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด", "เมาสุรา", "ตัดหน้ากระชั้นชิด"]))
                         accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย", "พลิกคว่ำ", "ชนสิ่งกีดขวาง"]))
 
-                    st.markdown("---")
-                    st.subheader("พิกัดสถานที่เกิดเหตุ (พิกัดสมมติ)")
-                    loc1, loc2 = st.columns(2)
-                    with loc1:
-                        lat_val = st.number_input("LATITUDE", value=8.4333, format="%.5f")
-                    with loc2:
-                        lon_val = st.number_input("LONGITUDE", value=99.9667, format="%.5f")
+                   
 
                     st.markdown("---")
                     st.subheader("🚗 ยานพาหนะที่เกี่ยวข้องและบุคคล (คัน/คน)")
