@@ -79,12 +79,19 @@ def load_ml_assets():
     try:
         model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
         scaler = joblib.load(os.path.join(current_dir, 'scaler.pkl'))
-        return model, scaler
+        
+        # พยายามโหลด feature_columns ถ้ามี
+        try:
+            feature_cols = joblib.load(os.path.join(current_dir, 'feature_columns.pkl'))
+        except:
+            feature_cols = scaler.feature_names_in_
+            
+        return model, scaler, feature_cols
     except Exception as e:
-        return None, None
+        return None, None, None
 
 df = load_data()
-model, scaler = load_ml_assets()
+model, scaler, feature_cols = load_ml_assets()
 
 # ฟังก์ชันดึงค่า Unique ตัวเลือกจากชุดข้อมูลเพื่อลด Error พิมพ์ผิด
 def get_options(col_name, default_list):
@@ -232,7 +239,6 @@ with tab3:
                 st.subheader("📝 ระบุปัจจัยแวดล้อม (Categorical)")
                 with st.form("ml_predict_form"):
                     
-                    # ตัวแปร Categorical ทั้ง 6 ตัว
                     c1, c2 = st.columns(2)
                     with c1:
                         time_period = st.selectbox("ช่วงเวลา", get_options('ช่วงเวลา', ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"]))
@@ -243,11 +249,16 @@ with tab3:
                         presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด", "เมาสุรา", "ตัดหน้ากระชั้นชิด"]))
                         accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย", "พลิกคว่ำ", "ชนสิ่งกีดขวาง"]))
 
-                   
+                    st.markdown("---")
+                    st.subheader("พิกัดสถานที่เกิดเหตุ (พิกัดสมมติ)")
+                    loc1, loc2 = st.columns(2)
+                    with loc1:
+                        lat_val = st.number_input("LATITUDE", value=8.4333, format="%.5f")
+                    with loc2:
+                        lon_val = st.number_input("LONGITUDE", value=99.9667, format="%.5f")
 
                     st.markdown("---")
                     st.subheader("🚗 ยานพาหนะที่เกี่ยวข้องและบุคคล (คัน/คน)")
-                    # จัดเรียง 13 พาหนะ + 1 คนเดินเท้า ให้เป็นระเบียบ
                     v1, v2, v3 = st.columns(3)
                     with v1:
                         v_moto = st.number_input("รถจักรยานยนต์", 0, 50, 1)
@@ -275,16 +286,15 @@ with tab3:
                 if submit_pred:
                     with st.spinner('กำลังประมวลผลผ่านโมเดล...'):
                         
-                        # สร้าง Dictionary ยิงเข้า DataFrame ให้ชื่อ Column ตรงเป๊ะตามที่ระบุมา
                         input_dict = {
-                            # Categorical
                             'ช่วงเวลา': [time_period], 
                             'จังหวัด': [province],
                             'บริเวณที่เกิดเหตุ': [location_type],
                             'มูลเหตุสันนิษฐาน': [presumed_cause],
                             'ลักษณะการเกิดเหตุ': [accident_type],
                             'สภาพอากาศ': [weather],
-                            
+                            'LATITUDE': [lat_val],
+                            'LONGITUDE': [lon_val],
                             'รถจักรยานยนต์': [v_moto],
                             'รถสามล้อเครื่อง': [v_tri],
                             'รถยนต์นั่งส่วนบุคคล': [v_car],
@@ -301,21 +311,24 @@ with tab3:
                         }
                         
                         input_df = pd.DataFrame(input_dict)
+                        input_dummies = pd.get_dummies(input_df)
                         
                         try:
-                            # 1. ดึงชื่อคอลัมน์จาก Scaler
+                            # 💡 ท่าไม้ตาย: ดึงชื่อคอลัมน์จาก Scaler มาโดยตรง (1,674 คอลัมน์)
                             correct_features = scaler.feature_names_in_
                             
-                            # 2. แปลงข้อมูล (1-Hot Encoding)
-                            input_dummies = pd.get_dummies(input_df)
+                            # สร้าง DataFrame เปล่าๆ ที่มีครบทุกคอลัมน์ และเซ็ตให้เป็น 0 ให้หมดก่อน
+                            input_final = pd.DataFrame(0, index=[0], columns=correct_features)
                             
-                            # 3. จัดเรียงคอลัมน์ให้ตรงเป๊ะ และเติม 0 ในคอลัมน์ที่ Dummy หาไม่เจอ
-                            input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
+                            # หยอดค่าที่เรามี ลงไปในคอลัมน์ที่ชื่อตรงกัน
+                            for col in input_dummies.columns:
+                                if col in input_final.columns:
+                                    input_final[col] = input_dummies[col]
                             
-                            # 4. ปรับสเกลข้อมูล
+                            # ปรับสเกลข้อมูล (รับรองไม่ Error คอลัมน์แล้ว!)
                             input_scaled = scaler.transform(input_final)
                             
-                            # 5. รันทำนายผล
+                            # รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
                             st.markdown("**ผลประเมินระดับความรุนแรง:**")
