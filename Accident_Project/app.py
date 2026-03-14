@@ -372,7 +372,6 @@ with tab3:
                             cat_inputs = {
 
                                 'ช่วงเวลา':time_period,
-                                'จังหวัด':province,
                                 'บริเวณที่เกิดเหตุ':location_type,
                                 'มูลเหตุสันนิษฐาน':presumed_cause,
                                 'ลักษณะการเกิดเหตุ':accident_type,
