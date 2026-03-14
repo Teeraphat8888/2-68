@@ -156,7 +156,7 @@ st.markdown("---")
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "📈 สถิติภาพรวม", 
-    "🗺️ แผนที่จุดเสี่ยง", 
+    "🗺️ แผนที่จุดเกิดเหตุ", 
     "🚨 ระบบทำนายความรุนแรง", 
     "📝 จัดการข้อมูล (CRUD)"
 ])
@@ -175,8 +175,8 @@ with tab1:
         total_dead = int(df['ผู้เสียชีวิต'].sum()) if 'ผู้เสียชีวิต' in df.columns else 0
         
         col1.metric("🚨 จำนวนอุบัติเหตุรวม", f"{total_acc:,} ครั้ง")
-        col2.metric("🔴 เสี่ยงสูง (High Risk)", f"{high_risk:,} ครั้ง")
-        col3.metric("🟢 เสี่ยงต่ำ (Low Risk)", f"{low_risk:,} ครั้ง")
+        col2.metric("🔴 รุนแรงสูง (High Severity)", f"{high_risk:,} ครั้ง")
+        col3.metric("🟢 รุนแรงต่ำ (Low Severity)", f"{low_risk:,} ครั้ง")
         col4.metric("💀 ผู้เสียชีวิตรวม", f"{total_dead:,} คน")
         
         st.markdown("---")
@@ -185,12 +185,14 @@ with tab1:
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
-            st.write("**สัดส่วนระดับความเสี่ยง**")
+            st.write("**สัดส่วนระดับความรุนแรง**")
             fig1, ax1 = plt.subplots(figsize=(6, 4))
             if 'ระดับความเสี่ยง' in df.columns:
                 sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#FF2B2B', '#09AB3B'], ax=ax1, order=['เสี่ยงสูง', 'เสี่ยงต่ำ'])
                 ax1.set_ylabel("จำนวน (ครั้ง)")
                 ax1.set_xlabel("")
+                # ปรับ Label ให้ตรงกับความรุนแรง
+                ax1.set_xticklabels(['รุนแรงสูง', 'รุนแรงต่ำ'])
                 st.pyplot(fig1)
             else:
                 st.info("ไม่พบคอลัมน์ 'ระดับความเสี่ยง'")
@@ -233,11 +235,11 @@ with tab2:
 # ------------------------------------------
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
-    st.write("ระบบจะทำนายระดับความรุนแรงของอุบัติเหตุจาก **ปัจจัยแวดล้อมและยานพาหนะ** เพื่อประเมินความเสี่ยงล่วงหน้า")
+    st.write("ระบบจะทำนาย **ระดับความรุนแรง** ของอุบัติเหตุ โดยประมวลผลผ่านโมเดล Machine Learning")
     
     if not st.session_state.get('logged_in', False):
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
-        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบพยากรณ์ความเสี่ยง")
+        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบพยากรณ์ความรุนแรง")
     else:
         if model is None or scaler is None:
             st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl` และ `scaler.pkl` อยู่ในระบบ")
@@ -263,7 +265,14 @@ with tab3:
                         pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
                         pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
                     
-                    # 💡 ถอดส่วนกรอกผู้บาดเจ็บและเสียชีวิตออกตามที่ User Request
+                    st.markdown("**ข้อมูลความสูญเสียเบื้องต้น**")
+                    col_inj1, col_inj2, col_inj3 = st.columns(3)
+                    with col_inj1:
+                        minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj2:
+                        severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", min_value=0, max_value=50, value=0)
+                    with col_inj3:
+                        fatalities = st.number_input("เสียชีวิต (คน)", min_value=0, max_value=50, value=0)
                     
                     submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
 
@@ -273,7 +282,6 @@ with tab3:
                 if submit_pred:
                     with st.spinner('กำลังประมวลผลผ่านโมเดล AI...'):
                         
-                        # นำเฉพาะตัวแปรแวดล้อมและพาหนะมาทำนายผล
                         input_dict = {
                             'รถจักรยานยนต์': [motorcycle], 
                             'รถยนต์นั่งส่วนบุคคล': [car],
@@ -282,6 +290,9 @@ with tab3:
                             'ช่วงเวลา': [time_period], 
                             'สภาพอากาศ': [weather],
                             'ลักษณะการเกิดเหตุ': [accident_type],
+                            'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
+                            'ผู้บาดเจ็บสาหัส': [severe_inj],
+                            'ผู้เสียชีวิต': [fatalities],
                             'LATITUDE': [8.4333], 
                             'LONGITUDE': [99.9667] 
                         }
@@ -294,19 +305,20 @@ with tab3:
                             # 2. แปลงข้อมูล
                             input_dummies = pd.get_dummies(input_df)
                             
-                            # เติมค่า 0 ให้คอลัมน์ที่ขาดหายไป (รวมถึงตัวเลขคนเจ็บที่โมเดลอาจจะเคยเห็นตอน Train ด้วย)
+                            # 3. จัดเรียงคอลัมน์
                             input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
                             
-                            # 3. ปรับสเกล
+                            # 4. ปรับสเกล
                             input_scaled = scaler.transform(input_final)
                             
-                            # 4. รันทำนายผล
+                            # 5. รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
-                            st.markdown("**ระดับความรุนแรงที่พยากรณ์ได้ (ประเมินจากปัจจัยแวดล้อม):**")
+                            st.markdown("**ผลประเมินระดับความรุนแรง:**")
                             
                             if prediction == 1: 
-                                st.warning("### ⚠️ ระดับความเสี่ยงสูง (High Risk)\n**AI ประเมินว่าเคสนี้มีแนวโน้มที่จะเกิดความสูญเสียรุนแรง**")
+                                # ใช้ st.error เพื่อให้เป็นสีแดงชัดเจน สำหรับเคสที่รุนแรง
+                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเคสนี้มีความรุนแรงสูง (มีการบาดเจ็บสาหัสหรือเสียชีวิต)**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
                                 - แจ้งศูนย์การแพทย์ฉุกเฉิน (EMS) พื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
@@ -314,7 +326,8 @@ with tab3:
                                 - เตรียมอุปกรณ์ตัดถ่างและส่องสว่างหากเป็นเวลากลางคืน
                                 """)
                             else:
-                                st.success("### ✅ ระดับความเสี่ยงต่ำ (Low Risk)\n**AI ประเมินว่าเคสนี้มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
+                                # ใช้ st.success สำหรับเคสที่รุนแรงต่ำ
+                                st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)\n**AI ประเมินว่าเคสนี้มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
                                 - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์และให้การปฐมพยาบาล
@@ -326,7 +339,7 @@ with tab3:
                             st.error(f"⚠️ เกิดข้อผิดพลาดในการคำนวณของโมเดล:")
                             st.code(f"Error Details: {e}")
                 else:
-                    st.info("👈 เลือกข้อมูลสภาวะแวดล้อมทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
+                    st.info("👈 กรอกข้อมูลอุบัติเหตุทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
 
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
