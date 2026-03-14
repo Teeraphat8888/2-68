@@ -218,121 +218,211 @@ with tab2:
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
     st.write("ระบุตัวแปรสภาพแวดล้อมและยานพาหนะให้ครบถ้วน เพื่อให้ AI ประเมินระดับความรุนแรงล่วงหน้า")
-    
+
     if not st.session_state.get('logged_in', False):
+
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
-        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar) เพื่อใช้งานระบบพยากรณ์ความรุนแรง")
+        st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar)")
+
     else:
+
         if model is None or scaler is None:
-            st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl` และ `scaler.pkl` อยู่ในระบบ")
+
+            st.error("🚨 ไม่พบไฟล์โมเดล AI")
+
         else:
-            col_input, col_result = st.columns([1.2, 1])
-            
+
+            col_input, col_result = st.columns([1.2,1])
+
+            # -----------------------------
+            # INPUT
+            # -----------------------------
             with col_input:
+
                 st.subheader("📝 ระบุปัจจัยแวดล้อม")
+
                 with st.form("ml_predict_form"):
-                    
-                    c1, c2 = st.columns(2)
+
+                    c1,c2 = st.columns(2)
+
                     with c1:
-                        time_period = st.selectbox("ช่วงเวลา", get_options('ช่วงเวลา', ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"]))
-                        province = st.selectbox("จังหวัด", get_options('จังหวัด', ["สุราษฎร์ธานี", "นครศรีธรรมราช", "ภูเก็ต"]))
-                        weather = st.selectbox("สภาพอากาศ", get_options('สภาพอากาศ', ["แจ่มใส", "ฝนตก", "ไม่ระบุ"]))
+
+                        time_period = st.selectbox(
+                            "ช่วงเวลา",
+                            get_options('ช่วงเวลา',
+                            ["เช้า","สาย","บ่าย","เย็น","กลางคืน"])
+                        )
+
+                        province = st.selectbox(
+                            "จังหวัด",
+                            get_options('จังหวัด',
+                            ["สุราษฎร์ธานี","นครศรีธรรมราช","ภูเก็ต"])
+                        )
+
+                        weather = st.selectbox(
+                            "สภาพอากาศ",
+                            get_options('สภาพอากาศ',
+                            ["แจ่มใส","ฝนตก","ไม่ระบุ"])
+                        )
+
                     with c2:
-                        location_type = st.selectbox("บริเวณที่เกิดเหตุ", get_options('บริเวณที่เกิดเหตุ', ["ทางตรง", "ทางโค้ง", "ทางแยก"]))
-                        presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด", "เมาสุรา", "ตัดหน้ากระชั้นชิด"]))
-                        accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย", "พลิกคว่ำ", "ชนสิ่งกีดขวาง"]))
+
+                        location_type = st.selectbox(
+                            "บริเวณที่เกิดเหตุ",
+                            get_options('บริเวณที่เกิดเหตุ',
+                            ["ทางตรง","ทางโค้ง","ทางแยก"])
+                        )
+
+                        presumed_cause = st.selectbox(
+                            "มูลเหตุสันนิษฐาน",
+                            get_options('มูลเหตุสันนิษฐาน',
+                            ["ขับรถเร็วเกินกำหนด","เมาสุรา","ตัดหน้ากระชั้นชิด"])
+                        )
+
+                        accident_type = st.selectbox(
+                            "ลักษณะการเกิดเหตุ",
+                            get_options('ลักษณะการเกิดเหตุ',
+                            ["ชนท้าย","พลิกคว่ำ","ชนสิ่งกีดขวาง"])
+                        )
 
                     st.markdown("---")
-                    st.subheader("🚗 ยานพาหนะที่เกี่ยวข้องและบุคคล (คัน/คน)")
-                    v1, v2, v3 = st.columns(3)
-                    with v1:
-                        v_moto = st.number_input("รถจักรยานยนต์", 0, 50, 1)
-                        v_car = st.number_input("รถยนต์นั่งส่วนบุคคล", 0, 50, 0)
-                        v_pick_pass = st.number_input("รถปิคอัพโดยสาร", 0, 50, 0)
-                        v_truck6 = st.number_input("รถบรรทุก6ล้อ", 0, 50, 0)
-                        v_etan = st.number_input("รถอีแต๋น", 0, 50, 0)
-                    with v2:
-                        v_tri = st.number_input("รถสามล้อเครื่อง", 0, 50, 0)
-                        v_van = st.number_input("รถตู้", 0, 50, 0)
-                        v_bus = st.number_input("รถโดยสารมากกว่า4ล้อ", 0, 50, 0)
-                        v_truck10 = st.number_input("รถบรรทุกไม่เกิน10ล้อ", 0, 50, 0)
-                        v_other = st.number_input("รถอื่นๆ", 0, 50, 0)
-                    with v3:
-                        v_pick_freight = st.number_input("รถปิคอัพบรรทุก4ล้อ", 0, 50, 0)
-                        v_truck_more10 = st.number_input("รถบรรทุกมากกว่า10ล้อ", 0, 50, 0)
-                        pedestrian = st.number_input("คนเดินเท้า", 0, 50, 0)
-                    
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรงด้วย AI 🔍", type="primary", use_container_width=True)
+                    st.subheader("🚗 ยานพาหนะที่เกี่ยวข้อง")
 
+                    v1,v2,v3 = st.columns(3)
+
+                    with v1:
+
+                        v_moto = st.number_input("รถจักรยานยนต์",0,50,1)
+                        v_car = st.number_input("รถยนต์นั่งส่วนบุคคล",0,50,0)
+                        v_pick_pass = st.number_input("รถปิคอัพโดยสาร",0,50,0)
+                        v_truck6 = st.number_input("รถบรรทุก6ล้อ",0,50,0)
+                        v_etan = st.number_input("รถอีแต๋น",0,50,0)
+
+                    with v2:
+
+                        v_tri = st.number_input("รถสามล้อเครื่อง",0,50,0)
+                        v_van = st.number_input("รถตู้",0,50,0)
+                        v_bus = st.number_input("รถโดยสารมากกว่า4ล้อ",0,50,0)
+                        v_truck10 = st.number_input("รถบรรทุกไม่เกิน10ล้อ",0,50,0)
+                        v_other = st.number_input("รถอื่นๆ",0,50,0)
+
+                    with v3:
+
+                        v_pick_freight = st.number_input("รถปิคอัพบรรทุก4ล้อ",0,50,0)
+                        v_truck_more10 = st.number_input("รถบรรทุกมากกว่า10ล้อ",0,50,0)
+                        pedestrian = st.number_input("คนเดินเท้า",0,50,0)
+
+                    submit_pred = st.form_submit_button(
+                        "วิเคราะห์ความรุนแรงด้วย AI 🔍",
+                        type="primary",
+                        use_container_width=True
+                    )
+
+            # -----------------------------
+            # RESULT
+            # -----------------------------
             with col_result:
+
                 st.subheader("🎯 ผลการทำนาย")
-                
+
                 if submit_pred:
-                    with st.spinner('กำลังประมวลผลผ่านโมเดล...'):
+
+                    with st.spinner("กำลังประมวลผล..."):
+
                         try:
-                            # 1. สร้างตารางเปล่าๆ ที่มีครบ 1,674 คอลัมน์ที่ AI รู้จัก
+
+                            # สร้าง dataframe
                             correct_features = scaler.feature_names_in_
-                            input_final = pd.DataFrame(0, index=[0], columns=correct_features)
-                            
-                            # 2. หยอดข้อมูลตัวเลขยานพาหนะ
+
+                            input_final = pd.DataFrame(
+                                0,
+                                index=[0],
+                                columns=correct_features
+                            )
+
+                            # -----------------------------
+                            # ตัวเลข
+                            # -----------------------------
                             numeric_inputs = {
-                                'รถจักรยานยนต์': v_moto, 'รถสามล้อเครื่อง': v_tri,
-                                'รถยนต์นั่งส่วนบุคคล': v_car, 'รถตู้': v_van,
-                                'รถปิคอัพโดยสาร': v_pick_pass, 'รถโดยสารมากกว่า4ล้อ': v_bus,
-                                'รถปิคอัพบรรทุก4ล้อ': v_pick_freight, 'รถบรรทุก6ล้อ': v_truck6,
-                                'รถบรรทุกไม่เกิน10ล้อ': v_truck10, 'รถบรรทุกมากกว่า10ล้อ': v_truck_more10,
-                                'รถอีแต๋น': v_etan, 'รถอื่นๆ': v_other, 'คนเดินเท้า': pedestrian
+
+                                'รถจักรยานยนต์':v_moto,
+                                'รถสามล้อเครื่อง':v_tri,
+                                'รถยนต์นั่งส่วนบุคคล':v_car,
+                                'รถตู้':v_van,
+                                'รถปิคอัพโดยสาร':v_pick_pass,
+                                'รถโดยสารมากกว่า4ล้อ':v_bus,
+                                'รถปิคอัพบรรทุก4ล้อ':v_pick_freight,
+                                'รถบรรทุก6ล้อ':v_truck6,
+                                'รถบรรทุกไม่เกิน10ล้อ':v_truck10,
+                                'รถบรรทุกมากกว่า10ล้อ':v_truck_more10,
+                                'รถอีแต๋น':v_etan,
+                                'รถอื่นๆ':v_other,
+                                'คนเดินเท้า':pedestrian
                             }
-                            for col, val in numeric_inputs.items():
+
+                            for col,val in numeric_inputs.items():
+
                                 if col in input_final.columns:
                                     input_final[col] = val
-                            
-                            # 3. หยอดข้อมูลหมวดหมู่ (จับคู่ชื่อคอลัมน์แบบตรงเป๊ะ!)
-                            cat_inputs = {
-                                'ช่วงเวลา': time_period,
-                                'จังหวัด': province,
-                                'บริเวณที่เกิดเหตุ': location_type,
-                                'มูลเหตุสันนิษฐาน': presumed_cause,
-                                'ลักษณะการเกิดเหตุ': accident_type,
-                                'สภาพอากาศ': weather
-                            }
-                            for cat_col, cat_val in cat_inputs.items():
-                                # เช่น กลายเป็นคำว่า "สภาพอากาศ_ฝนตก"
-                                dummy_col_name = f"{cat_col}_{cat_val}"
-                                if dummy_col_name in input_final.columns:
-                                    input_final[dummy_col_name] = 1
 
-                            # 4. ปรับสเกลข้อมูล
+
+                            # -----------------------------
+                            # Categorical
+                            # -----------------------------
+                            cat_inputs = {
+
+                                'ช่วงเวลา':time_period,
+                                'จังหวัด':province,
+                                'บริเวณที่เกิดเหตุ':location_type,
+                                'มูลเหตุสันนิษฐาน':presumed_cause,
+                                'ลักษณะการเกิดเหตุ':accident_type,
+                                'สภาพอากาศ':weather
+                            }
+
+                            for cat_col,cat_val in cat_inputs.items():
+
+                                dummy_name = f"{cat_col}_{cat_val}"
+
+                                if dummy_name in input_final.columns:
+                                    input_final[dummy_name] = 1
+
+
+                            # -----------------------------
+                            # Scale
+                            # -----------------------------
                             input_scaled = scaler.transform(input_final)
-                            
-                            # 5. รันทำนายผล
-                            prediction = model.predict(input_scaled)[0]
-                            
-                            st.markdown("**ผลประเมินระดับความรุนแรง:**")
-                            
-                            if prediction == 1: 
-                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง**")
-                                st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
-                                st.markdown("""
-                                - แจ้งศูนย์การแพทย์ฉุกเฉินพื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
-                                - ส่งเจ้าหน้าที่จัดการจราจรจุดเกิดเหตุทันทีเพื่อป้องกันอุบัติเหตุซ้ำซ้อน
-                                - เตรียมอุปกรณ์ตัดถ่างหากมีการใช้ยานพาหนะขนาดใหญ่
-                                """)
+
+
+                            # -----------------------------
+                            # Probability
+                            # -----------------------------
+                            proba = model.predict_proba(input_scaled)[0][1]
+
+                            st.write(f"🔎 ความเสี่ยงความรุนแรง: {proba*100:.2f}%")
+
+
+                            # -----------------------------
+                            # Threshold
+                            # -----------------------------
+                            if proba >= 0.20:
+
+                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)")
+                                st.write("AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง")
+
                             else:
-                                st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงต่ำ**")
-                                st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
-                                st.markdown("""
-                                - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์
-                                - เคลียร์พื้นที่ผิวจราจรโดยเร็วเพื่อหลีกเลี่ยงการจราจรติดขัด
-                                - บันทึกภาพและเก็บรวบรวมหลักฐานความเสียหาย
-                                """)
+
+                                st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)")
+                                st.write("AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงต่ำ")
+
 
                         except Exception as e:
-                            st.error(f"⚠️ เกิดข้อผิดพลาดในการคำนวณของโมเดล:")
-                            st.code(f"Error Details: {e}")
+
+                            st.error("⚠️ เกิดข้อผิดพลาดในการทำนาย")
+                            st.code(e)
+
                 else:
-                    st.info("👈 กรอกตัวแปรให้ครบถ้วนด้านซ้ายมือ แล้วคลิกปุ่มสีแดงด้านล่างสุดเพื่อประมวลผล")
+
+                    st.info("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มวิเคราะห์")
 
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
