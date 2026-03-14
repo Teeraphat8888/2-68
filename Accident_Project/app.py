@@ -247,6 +247,13 @@ with tab3:
                             get_options('ช่วงเวลา',
                             ["เช้า","สาย","บ่าย","เย็น","กลางคืน"])
                         )
+
+                        province = st.selectbox(
+                            "จังหวัด",
+                            get_options('จังหวัด',
+                            ["สุราษฎร์ธานี","นครศรีธรรมราช","ภูเก็ต"])
+                        )
+
                         weather = st.selectbox(
                             "สภาพอากาศ",
                             get_options('สภาพอากาศ',
@@ -360,6 +367,7 @@ with tab3:
                             cat_inputs = {
 
                                 'ช่วงเวลา':time_period,
+                                'จังหวัด':province,
                                 'บริเวณที่เกิดเหตุ':location_type,
                                 'มูลเหตุสันนิษฐาน':presumed_cause,
                                 'ลักษณะการเกิดเหตุ':accident_type,
@@ -385,7 +393,7 @@ with tab3:
                             # -----------------------------
                             proba = model.predict_proba(input_scaled)[0][1]
 
-                            st.write(f"🔎 ความเสี่ยงความรุนแรง: {proba*100:.2f}%")
+                            #st.write(f"🔎 ความเสี่ยงความรุนแรง: {proba*100:.2f}%")
 
 
                             # -----------------------------
@@ -393,7 +401,7 @@ with tab3:
                             # -----------------------------
                             if proba >= 0.20:
 
-                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)")
+                                st.error("### 🔴 ระดับความรุนแรง สูง (High Severity)")
                                 st.write("AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง")
 
                             else:
