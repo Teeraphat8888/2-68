@@ -79,21 +79,14 @@ def load_ml_assets():
     try:
         model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
         scaler = joblib.load(os.path.join(current_dir, 'scaler.pkl'))
-        
-        # พยายามโหลด feature_columns ถ้ามี
-        try:
-            feature_cols = joblib.load(os.path.join(current_dir, 'feature_columns.pkl'))
-        except:
-            feature_cols = scaler.feature_names_in_
-            
-        return model, scaler, feature_cols
+        return model, scaler
     except Exception as e:
-        return None, None, None
+        return None, None
 
 df = load_data()
-model, scaler, feature_cols = load_ml_assets()
+model, scaler = load_ml_assets()
 
-# ฟังก์ชันดึงค่า Unique ตัวเลือกจากชุดข้อมูลเพื่อลด Error พิมพ์ผิด
+# ฟังก์ชันดึงค่า Unique ตัวเลือก
 def get_options(col_name, default_list):
     if df is not None and col_name in df.columns:
         return sorted([str(x) for x in df[col_name].dropna().unique()])
@@ -220,7 +213,7 @@ with tab2:
         st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
 
 # ------------------------------------------
-# TAB 3: ทำนายผล (Prediction) - อิงตัวแปรจริงทั้งหมด
+# TAB 3: ทำนายผล (Prediction)
 # ------------------------------------------
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
@@ -236,7 +229,7 @@ with tab3:
             col_input, col_result = st.columns([1.2, 1])
             
             with col_input:
-                st.subheader("📝 ระบุปัจจัยแวดล้อม (Categorical)")
+                st.subheader("📝 ระบุปัจจัยแวดล้อม")
                 with st.form("ml_predict_form"):
                     
                     c1, c2 = st.columns(2)
@@ -248,14 +241,6 @@ with tab3:
                         location_type = st.selectbox("บริเวณที่เกิดเหตุ", get_options('บริเวณที่เกิดเหตุ', ["ทางตรง", "ทางโค้ง", "ทางแยก"]))
                         presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด", "เมาสุรา", "ตัดหน้ากระชั้นชิด"]))
                         accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย", "พลิกคว่ำ", "ชนสิ่งกีดขวาง"]))
-
-                    st.markdown("---")
-                    st.subheader("พิกัดสถานที่เกิดเหตุ (พิกัดสมมติ)")
-                    loc1, loc2 = st.columns(2)
-                    with loc1:
-                        lat_val = st.number_input("LATITUDE", value=8.4333, format="%.5f")
-                    with loc2:
-                        lon_val = st.number_input("LONGITUDE", value=99.9667, format="%.5f")
 
                     st.markdown("---")
                     st.subheader("🚗 ยานพาหนะที่เกี่ยวข้องและบุคคล (คัน/คน)")
@@ -285,50 +270,43 @@ with tab3:
                 
                 if submit_pred:
                     with st.spinner('กำลังประมวลผลผ่านโมเดล...'):
-                        
-                        input_dict = {
-                            'ช่วงเวลา': [time_period], 
-                            'จังหวัด': [province],
-                            'บริเวณที่เกิดเหตุ': [location_type],
-                            'มูลเหตุสันนิษฐาน': [presumed_cause],
-                            'ลักษณะการเกิดเหตุ': [accident_type],
-                            'สภาพอากาศ': [weather],
-                            'LATITUDE': [lat_val],
-                            'LONGITUDE': [lon_val],
-                            'รถจักรยานยนต์': [v_moto],
-                            'รถสามล้อเครื่อง': [v_tri],
-                            'รถยนต์นั่งส่วนบุคคล': [v_car],
-                            'รถตู้': [v_van],
-                            'รถปิคอัพโดยสาร': [v_pick_pass],
-                            'รถโดยสารมากกว่า4ล้อ': [v_bus],
-                            'รถปิคอัพบรรทุก4ล้อ': [v_pick_freight],
-                            'รถบรรทุก6ล้อ': [v_truck6],
-                            'รถบรรทุกไม่เกิน10ล้อ': [v_truck10],
-                            'รถบรรทุกมากกว่า10ล้อ': [v_truck_more10],
-                            'รถอีแต๋น': [v_etan],
-                            'รถอื่นๆ': [v_other],
-                            'คนเดินเท้า': [pedestrian]
-                        }
-                        
-                        input_df = pd.DataFrame(input_dict)
-                        input_dummies = pd.get_dummies(input_df)
-                        
                         try:
-                            # 💡 ท่าไม้ตาย: ดึงชื่อคอลัมน์จาก Scaler มาโดยตรง (1,674 คอลัมน์)
+                            # 1. สร้างตารางเปล่าๆ ที่มีครบ 1,674 คอลัมน์ที่ AI รู้จัก
                             correct_features = scaler.feature_names_in_
-                            
-                            # สร้าง DataFrame เปล่าๆ ที่มีครบทุกคอลัมน์ และเซ็ตให้เป็น 0 ให้หมดก่อน
                             input_final = pd.DataFrame(0, index=[0], columns=correct_features)
                             
-                            # หยอดค่าที่เรามี ลงไปในคอลัมน์ที่ชื่อตรงกัน
-                            for col in input_dummies.columns:
+                            # 2. หยอดข้อมูลตัวเลขยานพาหนะ
+                            numeric_inputs = {
+                                'รถจักรยานยนต์': v_moto, 'รถสามล้อเครื่อง': v_tri,
+                                'รถยนต์นั่งส่วนบุคคล': v_car, 'รถตู้': v_van,
+                                'รถปิคอัพโดยสาร': v_pick_pass, 'รถโดยสารมากกว่า4ล้อ': v_bus,
+                                'รถปิคอัพบรรทุก4ล้อ': v_pick_freight, 'รถบรรทุก6ล้อ': v_truck6,
+                                'รถบรรทุกไม่เกิน10ล้อ': v_truck10, 'รถบรรทุกมากกว่า10ล้อ': v_truck_more10,
+                                'รถอีแต๋น': v_etan, 'รถอื่นๆ': v_other, 'คนเดินเท้า': pedestrian
+                            }
+                            for col, val in numeric_inputs.items():
                                 if col in input_final.columns:
-                                    input_final[col] = input_dummies[col]
+                                    input_final[col] = val
                             
-                            # ปรับสเกลข้อมูล (รับรองไม่ Error คอลัมน์แล้ว!)
+                            # 3. หยอดข้อมูลหมวดหมู่ (จับคู่ชื่อคอลัมน์แบบตรงเป๊ะ!)
+                            cat_inputs = {
+                                'ช่วงเวลา': time_period,
+                                'จังหวัด': province,
+                                'บริเวณที่เกิดเหตุ': location_type,
+                                'มูลเหตุสันนิษฐาน': presumed_cause,
+                                'ลักษณะการเกิดเหตุ': accident_type,
+                                'สภาพอากาศ': weather
+                            }
+                            for cat_col, cat_val in cat_inputs.items():
+                                # เช่น กลายเป็นคำว่า "สภาพอากาศ_ฝนตก"
+                                dummy_col_name = f"{cat_col}_{cat_val}"
+                                if dummy_col_name in input_final.columns:
+                                    input_final[dummy_col_name] = 1
+
+                            # 4. ปรับสเกลข้อมูล
                             input_scaled = scaler.transform(input_final)
                             
-                            # รันทำนายผล
+                            # 5. รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
                             st.markdown("**ผลประเมินระดับความรุนแรง:**")
