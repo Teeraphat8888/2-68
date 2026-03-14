@@ -97,13 +97,12 @@ def load_ml_assets():
     try:
         model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
         scaler = joblib.load(os.path.join(current_dir, 'scaler.pkl'))
-        feature_cols = joblib.load(os.path.join(current_dir, 'feature_columns.pkl'))
-        return model, scaler, feature_cols
+        return model, scaler
     except Exception as e:
-        return None, None, None
+        return None, None
 
 df = load_data()
-model, scaler, feature_cols = load_ml_assets()
+model, scaler = load_ml_assets()
 
 # ==========================================
 # 4. ระบบ Login ใน Sidebar
@@ -158,7 +157,7 @@ st.markdown("---")
 tab1, tab2, tab3, tab4 = st.tabs([
     "📈 สถิติภาพรวม", 
     "🗺️ แผนที่จุดเสี่ยง", 
-    "🚨 พยากรณ์ความรุนแรง (AI)", 
+    "🚨 ระบบทำนายความรุนแรง", 
     "📝 จัดการข้อมูล (CRUD)"
 ])
 
@@ -222,123 +221,19 @@ with tab1:
 # TAB 2: แผนที่ (Map)
 # ------------------------------------------
 with tab2:
-    st.header("🗺️ แผนที่วิเคราะห์จุดเสี่ยงอุบัติเหตุ")
-    
-    if df is not None and 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-        map_data = df.dropna(subset=['LATITUDE', 'LONGITUDE']).copy()
-        map_data = map_data.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
-        
-        try:
-            from sklearn.cluster import DBSCAN
-            import numpy as np
-            import pydeck as pdk 
-            
-            # 1. คำนวณระยะทางและจัดกลุ่ม DBSCAN
-            coords = np.radians(map_data[['lat', 'lon']].values)
-            kms_per_radian = 6371.0088
-            epsilon = 0.5 / kms_per_radian
-            
-            db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(coords)
-            map_data['cluster'] = db.labels_
-            
-            # 2. ยุบรวมจุดและนับจำนวน
-            cluster_stats = map_data.groupby('cluster').agg(
-                lat=('lat', 'mean'),      
-                lon=('lon', 'mean'),      
-                acc_count=('cluster', 'count') 
-            ).reset_index()
-            
-            cluster_stats = cluster_stats.rename(columns={'acc_count': 'จำนวนอุบัติเหตุ'})
-            cluster_stats['ระดับความเสี่ยง'] = np.where(cluster_stats['จำนวนอุบัติเหตุ'] >= 5, 'เสี่ยงสูง', 'เสี่ยงต่ำ')
-            
-            # 3. กำหนดสีขอบและสีพื้น
-            cluster_stats['fill_color'] = cluster_stats['ระดับความเสี่ยง'].apply(
-                lambda x: [255, 43, 43, 80] if x == 'เสี่ยงสูง' else [9, 171, 59, 80]
-            )
-            cluster_stats['line_color'] = cluster_stats['ระดับความเสี่ยง'].apply(
-                lambda x: [255, 43, 43, 255] if x == 'เสี่ยงสูง' else [9, 171, 59, 255]
-            )
-            
-            # 4. คำนวณตัวเลขสรุป (Metrics)
-            high_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง'])
-            low_risk_zones = len(cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ'])
-            total_accidents_mapped = cluster_stats['จำนวนอุบัติเหตุ'].sum()
-            
-            # === แสดงผล UI ===
-            col_sum1, col_sum2, col_sum3 = st.columns(3)
-            col_sum1.metric("🔴 จุดเสี่ยงสูง (High Risk Zones)", f"{high_risk_zones:,} โซน")
-            col_sum2.metric("🟢 จุดเสี่ยงต่ำ (Low Risk Zones)", f"{low_risk_zones:,} โซน")
-            col_sum3.metric("📊 ครอบคลุมจำนวนอุบัติเหตุ", f"{total_accidents_mapped:,} ครั้ง")
-            
-            st.markdown("---")
-            
-            filter_opt = st.radio(
-                "เลือกระดับความเสี่ยงที่ต้องการแสดงบนแผนที่:",
-                ("🌎 แสดงทั้งหมด", "🔴 เฉพาะจุดเสี่ยงสูง (≥ 5 ครั้ง)", "🟢 เฉพาะจุดเสี่ยงต่ำ (< 5 ครั้ง)"),
-                horizontal=True
-            )
-            
-            if filter_opt == "🔴 เฉพาะจุดเสี่ยงสูง (≥ 5 ครั้ง)":
-                plot_data = cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงสูง']
-            elif filter_opt == "🟢 เฉพาะจุดเสี่ยงต่ำ (< 5 ครั้ง)":
-                plot_data = cluster_stats[cluster_stats['ระดับความเสี่ยง'] == 'เสี่ยงต่ำ']
-            else:
-                plot_data = cluster_stats
-                
-            st.write(f"กำลังแสดงจุดศูนย์กลางบนแผนที่: **{len(plot_data):,}** โซน")
-            
-            # 5. สร้างเลเยอร์แผนที่แบบ PyDeck
-            layer = pdk.Layer(
-                'ScatterplotLayer',
-                data=plot_data,
-                get_position='[lon, lat]',
-                get_radius=500,               
-                get_fill_color='fill_color',  
-                get_line_color='line_color',  
-                stroked=True,                 
-                filled=True,                  
-                line_width_min_pixels=3,      
-                pickable=True                 
-            )
-
-            # ตั้งค่ามุมมองแผนที่เริ่มต้น
-            view_state = pdk.ViewState(
-                latitude=plot_data['lat'].mean() if len(plot_data) > 0 else 8.4333,
-                longitude=plot_data['lon'].mean() if len(plot_data) > 0 else 99.9667,
-                zoom=7,
-                pitch=0
-            )
-
-            # ตั้งค่ากล่องข้อความ (Tooltip)
-            tooltip = {
-                "html": "<b>ระดับความเสี่ยง:</b> {ระดับความเสี่ยง} <br/> <b>จำนวนอุบัติเหตุ:</b> <span style='color: yellow;'>{จำนวนอุบัติเหตุ}</span> ครั้ง",
-                "style": {
-                    "backgroundColor": "#2C3E50",
-                    "color": "white",
-                    "font-family": "Sarabun, sans-serif",
-                    "border-radius": "8px",
-                    "padding": "10px"
-                }
-            }
-
-            # 💡 แสดงแผนที่ พร้อมเปลี่ยนพื้นหลังเป็นสีสว่าง (map_style='light')
-            st.pydeck_chart(pdk.Deck(
-                map_style='light', # <--- เพิ่มตรงนี้
-                layers=[layer],
-                initial_view_state=view_state,
-                tooltip=tooltip
-            ))
-            
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการสร้างแผนที่ขั้นสูง: {e}")
-            
+    if df is not None:
+        st.subheader("จุดเกิดเหตุอุบัติเหตุในพื้นที่")
+        map_df = df[['LATITUDE', 'LONGITUDE']].rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
+        st.map(map_df)
     else:
-        st.warning("⚠️ ไม่พบข้อมูลพิกัด (LATITUDE/LONGITUDE) ในไฟล์ข้อมูล")
+        st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
 
-
+# ------------------------------------------
+# TAB 3: ทำนายผล (Prediction) - แบบฟอร์มกรอกข้อมูล
+# ------------------------------------------
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
-    st.write("ระบบจะนำข้อมูลที่คุณกรอกไปประมวลผลผ่านโมเดล Machine Learning เพื่อทำนายระดับความรุนแรง")
+    st.write("ระบบจะทำนายระดับความรุนแรงของอุบัติเหตุจาก **ปัจจัยแวดล้อมและยานพาหนะ** เพื่อประเมินความเสี่ยงล่วงหน้า")
     
     if not st.session_state.get('logged_in', False):
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
@@ -368,6 +263,8 @@ with tab3:
                         pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
                         pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
                     
+                    # 💡 ถอดส่วนกรอกผู้บาดเจ็บและเสียชีวิตออกตามที่ User Request
+                    
                     submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
 
             with col_result:
@@ -375,12 +272,18 @@ with tab3:
                 
                 if submit_pred:
                     with st.spinner('กำลังประมวลผลผ่านโมเดล AI...'):
+                        
+                        # นำเฉพาะตัวแปรแวดล้อมและพาหนะมาทำนายผล
                         input_dict = {
-                            'รถจักรยานยนต์': [motorcycle], 'รถยนต์นั่งส่วนบุคคล': [car],
-                            'รถปิคอัพบรรทุก4ล้อ': [pickup], 'คนเดินเท้า': [pedestrian],
-                            'ช่วงเวลา': [time_period], 'สภาพอากาศ': [weather],
+                            'รถจักรยานยนต์': [motorcycle], 
+                            'รถยนต์นั่งส่วนบุคคล': [car],
+                            'รถปิคอัพบรรทุก4ล้อ': [pickup], 
+                            'คนเดินเท้า': [pedestrian],
+                            'ช่วงเวลา': [time_period], 
+                            'สภาพอากาศ': [weather],
                             'ลักษณะการเกิดเหตุ': [accident_type],
-                            'LATITUDE': [8.4333], 'LONGITUDE': [99.9667] 
+                            'LATITUDE': [8.4333], 
+                            'LONGITUDE': [99.9667] 
                         }
                         input_df = pd.DataFrame(input_dict)
                         
@@ -390,6 +293,8 @@ with tab3:
                             
                             # 2. แปลงข้อมูล
                             input_dummies = pd.get_dummies(input_df)
+                            
+                            # เติมค่า 0 ให้คอลัมน์ที่ขาดหายไป (รวมถึงตัวเลขคนเจ็บที่โมเดลอาจจะเคยเห็นตอน Train ด้วย)
                             input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
                             
                             # 3. ปรับสเกล
@@ -398,10 +303,10 @@ with tab3:
                             # 4. รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
-                            st.markdown("**ระดับความรุนแรงที่พยากรณ์ได้:**")
+                            st.markdown("**ระดับความรุนแรงที่พยากรณ์ได้ (ประเมินจากปัจจัยแวดล้อม):**")
                             
                             if prediction == 1: 
-                                st.warning("### ⚠️ ระดับความเสี่ยงสูง (High Risk)\n**AI ประเมินว่ามีแนวโน้มที่จะเกิดความสูญเสียรุนแรง (บาดเจ็บสาหัสหรือเสียชีวิต)**")
+                                st.warning("### ⚠️ ระดับความเสี่ยงสูง (High Risk)\n**AI ประเมินว่าเคสนี้มีแนวโน้มที่จะเกิดความสูญเสียรุนแรง**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
                                 - แจ้งศูนย์การแพทย์ฉุกเฉิน (EMS) พื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
@@ -409,7 +314,7 @@ with tab3:
                                 - เตรียมอุปกรณ์ตัดถ่างและส่องสว่างหากเป็นเวลากลางคืน
                                 """)
                             else:
-                                st.success("### ✅ ระดับความเสี่ยงต่ำ (Low Risk)\n**AI ประเมินว่ามีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
+                                st.success("### ✅ ระดับความเสี่ยงต่ำ (Low Risk)\n**AI ประเมินว่าเคสนี้มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
                                 - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์และให้การปฐมพยาบาล
@@ -421,7 +326,8 @@ with tab3:
                             st.error(f"⚠️ เกิดข้อผิดพลาดในการคำนวณของโมเดล:")
                             st.code(f"Error Details: {e}")
                 else:
-                    st.info("👈 กรอกข้อมูลอุบัติเหตุทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
+                    st.info("👈 เลือกข้อมูลสภาวะแวดล้อมทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
+
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
 # ------------------------------------------
