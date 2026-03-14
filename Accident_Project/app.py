@@ -13,15 +13,13 @@ import urllib.request
 # 1. ตั้งค่าฟอนต์ภาษาไทยสำหรับกราฟ (Matplotlib & Seaborn)
 # ==========================================
 font_path = "Sarabun-Regular.ttf"
-# ถ้ายังไม่มีไฟล์ฟอนต์ในเครื่อง/เซิร์ฟเวอร์ ให้ดาวน์โหลดอัตโนมัติ
 if not os.path.exists(font_path):
     url = "https://github.com/google/fonts/raw/main/ofl/sarabun/Sarabun-Regular.ttf"
     urllib.request.urlretrieve(url, font_path)
 
-# บังคับให้กราฟใช้ฟอนต์ Sarabun
 fm.fontManager.addfont(font_path)
 mpl.rc('font', family='Sarabun')
-mpl.rcParams['axes.unicode_minus'] = False # แก้ปัญหาสัญลักษณ์ลบ (-) กลายเป็นสี่เหลี่ยม
+mpl.rcParams['axes.unicode_minus'] = False 
 
 # ==========================================
 # 2. ตั้งค่าหน้าเว็บและดีไซน์ (Page Config & CSS)
@@ -42,42 +40,28 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def load_data():
-    # 💡 ให้ Python หาที่อยู่ปัจจุบันของไฟล์ app.py บนเครื่อง
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # รายชื่อไฟล์ที่ระบบจะลองค้นหา
     possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
     
     for filename in possible_filenames:
         file_path = os.path.join(current_dir, filename)
-        
         if os.path.exists(file_path):
             try:
-                # ลองอ่านแบบมาตรฐาน (utf-8-sig)
                 df = pd.read_csv(file_path, encoding='utf-8-sig')
-                
-                # คลีนข้อมูลพิกัด
                 if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
                     df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
                     df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
                     df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-                    
-                # สร้างคอลัมน์ระดับความเสี่ยง (ถ้ามี code)
                 if 'code_ระดับความเสี่ยง' in df.columns:
                     df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
-                    
                 return df
-            
             except UnicodeDecodeError:
                 try:
-                    # ถ้าอ่านไม่ได้ ลองอ่านแบบภาษาไทย Windows (windows-874)
                     df = pd.read_csv(file_path, encoding='windows-874')
-                    
                     if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
                         df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
                         df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
                         df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-                        
                     if 'code_ระดับความเสี่ยง' in df.columns:
                         df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
                     return df
@@ -87,12 +71,10 @@ def load_data():
             except Exception as e:
                 st.error(f"🚨 อ่านไฟล์ไม่ได้: {e}")
                 return None
-                
     return None
 
 @st.cache_resource
 def load_ml_assets():
-    # ระบบค้นหาไฟล์โมเดลอัตโนมัติ 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     try:
         model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
@@ -167,7 +149,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     if df is not None:
         st.markdown("### 📊 ภาพรวมสถิติอุบัติเหตุทางถนน")
-        
         col1, col2, col3, col4 = st.columns(4)
         total_acc = len(df)
         high_risk = len(df[df['ระดับความเสี่ยง'] == 'เสี่ยงสูง']) if 'ระดับความเสี่ยง' in df.columns else 0
@@ -178,12 +159,10 @@ with tab1:
         col2.metric("🔴 รุนแรงสูง (High Severity)", f"{high_risk:,} ครั้ง")
         col3.metric("🟢 รุนแรงต่ำ (Low Severity)", f"{low_risk:,} ครั้ง")
         col4.metric("💀 ผู้เสียชีวิตรวม", f"{total_dead:,} คน")
-        
         st.markdown("---")
         
         st.markdown("#### 📈 วิเคราะห์ปัจจัยการเกิดอุบัติเหตุ")
         col_g1, col_g2 = st.columns(2)
-        
         with col_g1:
             st.write("**สัดส่วนระดับความรุนแรง**")
             fig1, ax1 = plt.subplots(figsize=(6, 4))
@@ -191,7 +170,6 @@ with tab1:
                 sns.countplot(data=df, x='ระดับความเสี่ยง', palette=['#FF2B2B', '#09AB3B'], ax=ax1, order=['เสี่ยงสูง', 'เสี่ยงต่ำ'])
                 ax1.set_ylabel("จำนวน (ครั้ง)")
                 ax1.set_xlabel("")
-                # ปรับ Label ให้ตรงกับความรุนแรง
                 ax1.set_xticklabels(['รุนแรงสูง', 'รุนแรงต่ำ'])
                 st.pyplot(fig1)
             else:
@@ -211,11 +189,9 @@ with tab1:
                 st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")
                 
         st.markdown("---")
-        
         st.markdown("#### 📋 ข้อมูลรายละเอียด (Raw Data)")
         st.dataframe(df.head(100), use_container_width=True)
         st.caption(f"💡 กำลังแสดงผล 100 รายการแรก จากข้อมูลทั้งหมด {total_acc:,} รายการ")
-        
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
@@ -235,7 +211,7 @@ with tab2:
 # ------------------------------------------
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
-    st.write("ระบบจะทำนาย **ระดับความรุนแรง** ของอุบัติเหตุ โดยประมวลผลผ่านโมเดล Machine Learning")
+    st.write("ระบบจะทำนาย **ระดับความรุนแรง** ของอุบัติเหตุจากลักษณะการเกิดเหตุและยานพาหนะ")
     
     if not st.session_state.get('logged_in', False):
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
@@ -265,15 +241,6 @@ with tab3:
                         pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
                         pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
                     
-                    st.markdown("**ข้อมูลความสูญเสียเบื้องต้น**")
-                    col_inj1, col_inj2, col_inj3 = st.columns(3)
-                    with col_inj1:
-                        minor_inj = st.number_input("บาดเจ็บเล็กน้อย (คน)", min_value=0, max_value=50, value=0)
-                    with col_inj2:
-                        severe_inj = st.number_input("บาดเจ็บสาหัส (คน)", min_value=0, max_value=50, value=0)
-                    with col_inj3:
-                        fatalities = st.number_input("เสียชีวิต (คน)", min_value=0, max_value=50, value=0)
-                    
                     submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
 
             with col_result:
@@ -290,9 +257,6 @@ with tab3:
                             'ช่วงเวลา': [time_period], 
                             'สภาพอากาศ': [weather],
                             'ลักษณะการเกิดเหตุ': [accident_type],
-                            'ผู้บาดเจ็บเล็กน้อย': [minor_inj],
-                            'ผู้บาดเจ็บสาหัส': [severe_inj],
-                            'ผู้เสียชีวิต': [fatalities],
                             'LATITUDE': [8.4333], 
                             'LONGITUDE': [99.9667] 
                         }
@@ -305,7 +269,7 @@ with tab3:
                             # 2. แปลงข้อมูล
                             input_dummies = pd.get_dummies(input_df)
                             
-                            # 3. จัดเรียงคอลัมน์
+                            # 3. จัดเรียงคอลัมน์ (และเติม 0 ในคอลัมน์ที่ขาดหายไป)
                             input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
                             
                             # 4. ปรับสเกล
@@ -317,8 +281,7 @@ with tab3:
                             st.markdown("**ผลประเมินระดับความรุนแรง:**")
                             
                             if prediction == 1: 
-                                # ใช้ st.error เพื่อให้เป็นสีแดงชัดเจน สำหรับเคสที่รุนแรง
-                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเคสนี้มีความรุนแรงสูง (มีการบาดเจ็บสาหัสหรือเสียชีวิต)**")
+                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเคสนี้มีความรุนแรงสูง (มีโอกาสบาดเจ็บสาหัสหรือเสียชีวิต)**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
                                 - แจ้งศูนย์การแพทย์ฉุกเฉิน (EMS) พื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
@@ -326,7 +289,6 @@ with tab3:
                                 - เตรียมอุปกรณ์ตัดถ่างและส่องสว่างหากเป็นเวลากลางคืน
                                 """)
                             else:
-                                # ใช้ st.success สำหรับเคสที่รุนแรงต่ำ
                                 st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)\n**AI ประเมินว่าเคสนี้มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือมีเพียงทรัพย์สินเสียหาย**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
@@ -351,7 +313,6 @@ with tab4:
         st.write("### 🗃️ ฐานข้อมูลอุบัติเหตุ (CRUD Management)")
         
         if df is not None:
-            # ค้นหาและแสดงผล
             search = st.text_input("🔍 ค้นหาข้อมูล (จังหวัด, ช่วงเวลา, ฯลฯ)")
             if search:
                 filtered_df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
@@ -361,8 +322,6 @@ with tab4:
                 st.caption(f"แสดงข้อมูล 100 รายการล่าสุด จากทั้งหมด {len(df):,} รายการ")
             
             st.markdown("---")
-            
-            # ฟอร์มเพิ่ม/แก้ไข/ลบ
             col_c, col_ud = st.columns(2)
             
             with col_c:
