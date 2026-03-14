@@ -285,9 +285,6 @@ with tab3:
                             'ลักษณะการเกิดเหตุ': [accident_type],
                             'สภาพอากาศ': [weather],
                             
-                            # Numerical
-                            'LATITUDE': [lat_val],
-                            'LONGITUDE': [lon_val],
                             'รถจักรยานยนต์': [v_moto],
                             'รถสามล้อเครื่อง': [v_tri],
                             'รถยนต์นั่งส่วนบุคคล': [v_car],
