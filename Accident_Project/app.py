@@ -42,56 +42,77 @@ st.markdown("""
 def load_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
-    
+
     for filename in possible_filenames:
         file_path = os.path.join(current_dir, filename)
+
         if os.path.exists(file_path):
+
             try:
                 df = pd.read_csv(file_path, encoding='utf-8-sig')
-                if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                    df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
-                    df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
-                    df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-                if 'code_ระดับความเสี่ยง' in df.columns:
-                    df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
-                return df
+
             except UnicodeDecodeError:
                 try:
                     df = pd.read_csv(file_path, encoding='windows-874')
-                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
-                        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
-                        df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-                    if 'code_ระดับความเสี่ยง' in df.columns:
-                        df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
-                    return df
                 except Exception as e:
                     st.error(f"🚨 ไฟล์มีปัญหาเรื่องภาษาไทย: {e}")
                     return None
+
             except Exception as e:
                 st.error(f"🚨 อ่านไฟล์ไม่ได้: {e}")
                 return None
+
+            # แปลงพิกัด
+            if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+
+            # แปลงระดับความเสี่ยง
+            if 'code_ระดับความเสี่ยง' in df.columns:
+                df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({
+                    1: 'เสี่ยงต่ำ',
+                    2: 'เสี่ยงสูง'
+                })
+
+            return df
+
+    st.error("⚠️ ไม่พบไฟล์ Data_2Class_V1.csv ในโฟลเดอร์")
     return None
+
 
 @st.cache_resource
 def load_ml_assets():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+
     try:
-        model = joblib.load(os.path.join(current_dir, 'best_model.pkl'))
-        scaler = joblib.load(os.path.join(current_dir, 'scaler.pkl'))
+        model = joblib.load("best_model.pkl")
+        scaler = joblib.load("scaler.pkl")
+
+        st.success("✅ โหลดโมเดล AI สำเร็จ")
+
         return model, scaler
+
     except Exception as e:
+
+        st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
+
+        st.write("ไฟล์ในโฟลเดอร์ปัจจุบัน:")
+        st.write(os.listdir())
+
         return None, None
 
 df = load_data()
 model, scaler = load_ml_assets()
 
+
 # ฟังก์ชันดึงค่า Unique ตัวเลือก
 def get_options(col_name, default_list):
-    if df is not None and col_name in df.columns:
-        return sorted([str(x) for x in df[col_name].dropna().unique()])
-    return default_list
 
+    if df is not None and col_name in df.columns:
+
+        return sorted([str(x) for x in df[col_name].dropna().unique()])
+
+    return default_list
 # ==========================================
 # 4. ระบบ Login ใน Sidebar
 # ==========================================
@@ -118,7 +139,7 @@ with st.sidebar:
                 col_l1, col_l2 = st.columns(2)
                 with col_l1:
                     if st.button("ยืนยัน", use_container_width=True, type="primary"):
-                        if user == "admin" and pw == "admin1111":
+                        if user == "admin" and pw == "admin123":
                             st.session_state['logged_in'] = True
                             st.session_state['show_login'] = False
                             st.success("สำเร็จ!")
@@ -192,7 +213,12 @@ with tab1:
                 ax2.set_xlabel("")
                 st.pyplot(fig2)
             else:
-                st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")  
+                st.info("ไม่พบคอลัมน์ 'ช่วงเวลา'")
+                
+        st.markdown("---")
+        st.markdown("#### 📋 ข้อมูลรายละเอียด (Raw Data)")
+        st.dataframe(df.head(100), use_container_width=True)
+        st.caption(f"💡 กำลังแสดงผล 100 รายการแรก จากข้อมูลทั้งหมด {total_acc:,} รายการ")
     else:
         st.error("⚠️ ไม่พบไฟล์ข้อมูล CSV กรุณาตรวจสอบการอัปโหลด")
 
@@ -393,7 +419,7 @@ with tab3:
                             # -----------------------------
                             proba = model.predict_proba(input_scaled)[0][1]
 
-                            st.write(f"🔎 ความเสี่ยงความรุนแรง: {proba*100:.2f}%")
+                         
 
 
                             # -----------------------------
@@ -418,7 +444,6 @@ with tab3:
                 else:
 
                     st.info("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มวิเคราะห์")
-
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
 # ------------------------------------------
