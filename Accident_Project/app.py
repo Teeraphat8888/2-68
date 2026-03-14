@@ -36,83 +36,86 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. ฟังก์ชันโหลดข้อมูลและโมเดล
+# 3. ฟังก์ชันโหลดข้อมูลและโมเดล (ฉบับอัปเกรด ค้นหาทะลุโฟลเดอร์)
 # ==========================================
 @st.cache_data
 def load_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 💡 เพิ่มโฟลเดอร์ Accident_Project เข้าไปในคิวค้นหาด้วย
+    search_dirs = [current_dir, os.path.join(current_dir, 'Accident_Project')]
     possible_filenames = ['Data_2Class_V1.csv', 'Data_2Class_V1.csv.csv', 'Data_2Class_V1']
-
-    for filename in possible_filenames:
-        file_path = os.path.join(current_dir, filename)
-
-        if os.path.exists(file_path):
-
-            try:
-                df = pd.read_csv(file_path, encoding='utf-8-sig')
-
-            except UnicodeDecodeError:
+    
+    for d in search_dirs:
+        for filename in possible_filenames:
+            file_path = os.path.join(d, filename)
+            if os.path.exists(file_path):
                 try:
-                    df = pd.read_csv(file_path, encoding='windows-874')
-                except Exception as e:
-                    st.error(f"🚨 ไฟล์มีปัญหาเรื่องภาษาไทย: {e}")
-                    return None
-
-            except Exception as e:
-                st.error(f"🚨 อ่านไฟล์ไม่ได้: {e}")
-                return None
-
-            # แปลงพิกัด
-            if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
-                df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
-                df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
-
-            # แปลงระดับความเสี่ยง
-            if 'code_ระดับความเสี่ยง' in df.columns:
-                df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({
-                    1: 'เสี่ยงต่ำ',
-                    2: 'เสี่ยงสูง'
-                })
-
-            return df
-
-    st.error("⚠️ ไม่พบไฟล์ Data_2Class_V1.csv ในโฟลเดอร์")
+                    df = pd.read_csv(file_path, encoding='utf-8-sig')
+                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                        df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                        df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                        df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+                    if 'code_ระดับความเสี่ยง' in df.columns:
+                        df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
+                    return df
+                except UnicodeDecodeError:
+                    try:
+                        df = pd.read_csv(file_path, encoding='windows-874')
+                        if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+                            df['LATITUDE'] = pd.to_numeric(df['LATITUDE'], errors='coerce')
+                            df['LONGITUDE'] = pd.to_numeric(df['LONGITUDE'], errors='coerce')
+                            df = df.dropna(subset=['LATITUDE', 'LONGITUDE'])
+                        if 'code_ระดับความเสี่ยง' in df.columns:
+                            df['ระดับความเสี่ยง'] = df['code_ระดับความเสี่ยง'].map({1: 'เสี่ยงต่ำ', 2: 'เสี่ยงสูง'})
+                        return df
+                    except Exception as e:
+                        st.error(f"🚨 ไฟล์มีปัญหาเรื่องภาษาไทย: {e}")
+                        return None
     return None
-
 
 @st.cache_resource
 def load_ml_assets():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    search_dirs = [current_dir, os.path.join(current_dir, 'Accident_Project')]
+    
+    def find_file(filename):
+        for d in search_dirs:
+            path = os.path.join(d, filename)
+            if os.path.exists(path):
+                return path
+        return None
 
     try:
-        model = joblib.load("best_model.pkl")
-        scaler = joblib.load("scaler.pkl")
+        model_path = find_file('best_model.pkl')
+        scaler_path = find_file('scaler.pkl')
+        feat_path = find_file('feature_columns.pkl')
+        
+        if not model_path or not scaler_path:
+            st.error("❌ หาไฟล์โมเดลไม่พบ กรุณาตรวจสอบว่ามีไฟล์อยู่ในโฟลเดอร์ Project")
+            return None, None, None
 
-        st.success("✅ โหลดโมเดล AI สำเร็จ")
-
-        return model, scaler
-
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        
+        if feat_path:
+            feature_cols = joblib.load(feat_path)
+        else:
+            feature_cols = scaler.feature_names_in_
+            
+        return model, scaler, feature_cols
     except Exception as e:
-
         st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
-
-        st.write("ไฟล์ในโฟลเดอร์ปัจจุบัน:")
-        st.write(os.listdir())
-
-        return None, None
+        return None, None, None
 
 df = load_data()
-model, scaler = load_ml_assets()
-
+model, scaler, feature_cols = load_ml_assets()
 
 # ฟังก์ชันดึงค่า Unique ตัวเลือก
 def get_options(col_name, default_list):
-
     if df is not None and col_name in df.columns:
-
         return sorted([str(x) for x in df[col_name].dropna().unique()])
-
     return default_list
+
 # ==========================================
 # 4. ระบบ Login ใน Sidebar
 # ==========================================
@@ -241,78 +244,34 @@ with tab3:
     st.write("ระบุตัวแปรสภาพแวดล้อมและยานพาหนะให้ครบถ้วน เพื่อให้ AI ประเมินระดับความรุนแรงล่วงหน้า")
 
     if not st.session_state.get('logged_in', False):
-
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
         st.info("กรุณาเข้าสู่ระบบผ่านแถบเมนูด้านซ้ายมือ (Sidebar)")
-
     else:
-
         if model is None or scaler is None:
-
             st.error("🚨 ไม่พบไฟล์โมเดล AI")
-
         else:
-
             col_input, col_result = st.columns([1.2,1])
 
-            # -----------------------------
-            # INPUT
-            # -----------------------------
             with col_input:
-
                 st.subheader("📝 ระบุปัจจัยแวดล้อม")
-
                 with st.form("ml_predict_form"):
 
                     c1,c2 = st.columns(2)
-
                     with c1:
-
-                        time_period = st.selectbox(
-                            "ช่วงเวลา",
-                            get_options('ช่วงเวลา',
-                            ["เช้า","สาย","บ่าย","เย็น","กลางคืน"])
-                        )
-
-                        province = st.selectbox(
-                            "จังหวัด",
-                            get_options('จังหวัด',
-                            ["สุราษฎร์ธานี","นครศรีธรรมราช","ภูเก็ต"])
-                        )
-
-                        weather = st.selectbox(
-                            "สภาพอากาศ",
-                            get_options('สภาพอากาศ',
-                            ["แจ่มใส","ฝนตก","ไม่ระบุ"])
-                        )
+                        time_period = st.selectbox("ช่วงเวลา", get_options('ช่วงเวลา', ["เช้า","สาย","บ่าย","เย็น","กลางคืน"]))
+                        province = st.selectbox("จังหวัด", get_options('จังหวัด', ["สุราษฎร์ธานี","นครศรีธรรมราช","ภูเก็ต"]))
+                        weather = st.selectbox("สภาพอากาศ", get_options('สภาพอากาศ', ["แจ่มใส","ฝนตก","ไม่ระบุ"]))
 
                     with c2:
-
-                        location_type = st.selectbox(
-                            "บริเวณที่เกิดเหตุ",
-                            get_options('บริเวณที่เกิดเหตุ',
-                            ["ทางตรง","ทางโค้ง","ทางแยก"])
-                        )
-
-                        presumed_cause = st.selectbox(
-                            "มูลเหตุสันนิษฐาน",
-                            get_options('มูลเหตุสันนิษฐาน',
-                            ["ขับรถเร็วเกินกำหนด","เมาสุรา","ตัดหน้ากระชั้นชิด"])
-                        )
-
-                        accident_type = st.selectbox(
-                            "ลักษณะการเกิดเหตุ",
-                            get_options('ลักษณะการเกิดเหตุ',
-                            ["ชนท้าย","พลิกคว่ำ","ชนสิ่งกีดขวาง"])
-                        )
+                        location_type = st.selectbox("บริเวณที่เกิดเหตุ", get_options('บริเวณที่เกิดเหตุ', ["ทางตรง","ทางโค้ง","ทางแยก"]))
+                        presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด","เมาสุรา","ตัดหน้ากระชั้นชิด"]))
+                        accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย","พลิกคว่ำ","ชนสิ่งกีดขวาง"]))
 
                     st.markdown("---")
                     st.subheader("🚗 ยานพาหนะที่เกี่ยวข้อง")
 
                     v1,v2,v3 = st.columns(3)
-
                     with v1:
-
                         v_moto = st.number_input("รถจักรยานยนต์",0,50,1)
                         v_car = st.number_input("รถยนต์นั่งส่วนบุคคล",0,50,0)
                         v_pick_pass = st.number_input("รถปิคอัพโดยสาร",0,50,0)
@@ -320,7 +279,6 @@ with tab3:
                         v_etan = st.number_input("รถอีแต๋น",0,50,0)
 
                     with v2:
-
                         v_tri = st.number_input("รถสามล้อเครื่อง",0,50,0)
                         v_van = st.number_input("รถตู้",0,50,0)
                         v_bus = st.number_input("รถโดยสารมากกว่า4ล้อ",0,50,0)
@@ -328,7 +286,6 @@ with tab3:
                         v_other = st.number_input("รถอื่นๆ",0,50,0)
 
                     with v3:
-
                         v_pick_freight = st.number_input("รถปิคอัพบรรทุก4ล้อ",0,50,0)
                         v_truck_more10 = st.number_input("รถบรรทุกมากกว่า10ล้อ",0,50,0)
                         pedestrian = st.number_input("คนเดินเท้า",0,50,0)
@@ -339,111 +296,59 @@ with tab3:
                         use_container_width=True
                     )
 
-            # -----------------------------
-            # RESULT
-            # -----------------------------
             with col_result:
-
                 st.subheader("🎯 ผลการทำนาย")
 
                 if submit_pred:
-
                     with st.spinner("กำลังประมวลผล..."):
-
                         try:
-
-                            # สร้าง dataframe
                             correct_features = scaler.feature_names_in_
+                            input_final = pd.DataFrame(0, index=[0], columns=correct_features)
 
-                            input_final = pd.DataFrame(
-                                0,
-                                index=[0],
-                                columns=correct_features
-                            )
-
-                            # -----------------------------
-                            # ตัวเลข
-                            # -----------------------------
                             numeric_inputs = {
-
-                                'รถจักรยานยนต์':v_moto,
-                                'รถสามล้อเครื่อง':v_tri,
-                                'รถยนต์นั่งส่วนบุคคล':v_car,
-                                'รถตู้':v_van,
-                                'รถปิคอัพโดยสาร':v_pick_pass,
-                                'รถโดยสารมากกว่า4ล้อ':v_bus,
-                                'รถปิคอัพบรรทุก4ล้อ':v_pick_freight,
-                                'รถบรรทุก6ล้อ':v_truck6,
-                                'รถบรรทุกไม่เกิน10ล้อ':v_truck10,
-                                'รถบรรทุกมากกว่า10ล้อ':v_truck_more10,
-                                'รถอีแต๋น':v_etan,
-                                'รถอื่นๆ':v_other,
-                                'คนเดินเท้า':pedestrian
+                                'รถจักรยานยนต์':v_moto, 'รถสามล้อเครื่อง':v_tri,
+                                'รถยนต์นั่งส่วนบุคคล':v_car, 'รถตู้':v_van,
+                                'รถปิคอัพโดยสาร':v_pick_pass, 'รถโดยสารมากกว่า4ล้อ':v_bus,
+                                'รถปิคอัพบรรทุก4ล้อ':v_pick_freight, 'รถบรรทุก6ล้อ':v_truck6,
+                                'รถบรรทุกไม่เกิน10ล้อ':v_truck10, 'รถบรรทุกมากกว่า10ล้อ':v_truck_more10,
+                                'รถอีแต๋น':v_etan, 'รถอื่นๆ':v_other, 'คนเดินเท้า':pedestrian
                             }
 
                             for col,val in numeric_inputs.items():
-
                                 if col in input_final.columns:
                                     input_final[col] = val
 
-
-                            # -----------------------------
-                            # Categorical
-                            # -----------------------------
                             cat_inputs = {
-
-                                'ช่วงเวลา':time_period,
-                                'จังหวัด':province,
-                                'บริเวณที่เกิดเหตุ':location_type,
-                                'มูลเหตุสันนิษฐาน':presumed_cause,
-                                'ลักษณะการเกิดเหตุ':accident_type,
-                                'สภาพอากาศ':weather
+                                'ช่วงเวลา':time_period, 'จังหวัด':province,
+                                'บริเวณที่เกิดเหตุ':location_type, 'มูลเหตุสันนิษฐาน':presumed_cause,
+                                'ลักษณะการเกิดเหตุ':accident_type, 'สภาพอากาศ':weather
                             }
 
                             for cat_col,cat_val in cat_inputs.items():
-
                                 dummy_name = f"{cat_col}_{cat_val}"
-
                                 if dummy_name in input_final.columns:
                                     input_final[dummy_name] = 1
 
-
-                            # -----------------------------
-                            # Scale
-                            # -----------------------------
                             input_scaled = scaler.transform(input_final)
 
-
-                            # -----------------------------
-                            # Probability
-                            # -----------------------------
+                            # ดึงเปอร์เซ็นต์ความเสี่ยง
                             proba = model.predict_proba(input_scaled)[0][1]
+                            st.write(f"🔎 ความเสี่ยงความรุนแรง: **{proba*100:.2f}%**")
 
-                         
-
-
-                            # -----------------------------
-                            # Threshold
-                            # -----------------------------
+                            # แบ่งเกณฑ์ด้วย Threshold 20%
                             if proba >= 0.20:
-
                                 st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)")
                                 st.write("AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง")
-
                             else:
-
                                 st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)")
                                 st.write("AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงต่ำ")
 
-
                         except Exception as e:
-
                             st.error("⚠️ เกิดข้อผิดพลาดในการทำนาย")
                             st.code(e)
-
                 else:
-
                     st.info("👈 กรอกข้อมูลด้านซ้ายแล้วกดปุ่มวิเคราะห์")
+
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
 # ------------------------------------------
