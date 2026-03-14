@@ -10,7 +10,7 @@ import os
 import urllib.request
 
 # ==========================================
-# 1. ตั้งค่าฟอนต์ภาษาไทยสำหรับกราฟ (Matplotlib & Seaborn)
+# 1. ตั้งค่าฟอนต์ภาษาไทยสำหรับกราฟ
 # ==========================================
 font_path = "Sarabun-Regular.ttf"
 if not os.path.exists(font_path):
@@ -22,7 +22,7 @@ mpl.rc('font', family='Sarabun')
 mpl.rcParams['axes.unicode_minus'] = False 
 
 # ==========================================
-# 2. ตั้งค่าหน้าเว็บและดีไซน์ (Page Config & CSS)
+# 2. ตั้งค่าหน้าเว็บ
 # ==========================================
 st.set_page_config(page_title="Road Safety Dashboard", page_icon="🚑", layout="wide")
 
@@ -85,6 +85,12 @@ def load_ml_assets():
 
 df = load_data()
 model, scaler = load_ml_assets()
+
+# ฟังก์ชันดึงค่า Unique ตัวเลือกจากชุดข้อมูลเพื่อลด Error พิมพ์ผิด
+def get_options(col_name, default_list):
+    if df is not None and col_name in df.columns:
+        return sorted([str(x) for x in df[col_name].dropna().unique()])
+    return default_list
 
 # ==========================================
 # 4. ระบบ Login ใน Sidebar
@@ -207,11 +213,11 @@ with tab2:
         st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
 
 # ------------------------------------------
-# TAB 3: ทำนายผล (Prediction) - แบบฟอร์มกรอกข้อมูล
+# TAB 3: ทำนายผล (Prediction) - อิงตัวแปรจริงทั้งหมด
 # ------------------------------------------
 with tab3:
     st.header("🤖 ระบบพยากรณ์ความรุนแรงของอุบัติเหตุด้วย AI")
-    st.write("ระบบจะทำนาย **ระดับความรุนแรง** ของอุบัติเหตุจากสภาพแวดล้อมและยานพาหนะเท่านั้น (เพื่อการป้องกันล่วงหน้า)")
+    st.write("ระบุตัวแปรสภาพแวดล้อมและยานพาหนะให้ครบถ้วน เพื่อให้ AI ประเมินระดับความรุนแรงล่วงหน้า")
     
     if not st.session_state.get('logged_in', False):
         st.error("### 🔒 เนื้อหาสงวนสิทธิ์เฉพาะเจ้าหน้าที่")
@@ -220,82 +226,122 @@ with tab3:
         if model is None or scaler is None:
             st.error("🚨 ไม่พบไฟล์โมเดล AI กรุณาตรวจสอบว่ามีไฟล์ `best_model.pkl` และ `scaler.pkl` อยู่ในระบบ")
         else:
-            col_input, col_result = st.columns([1, 1])
+            col_input, col_result = st.columns([1.2, 1])
             
             with col_input:
-                st.subheader("📝 ระบุรายละเอียดอุบัติเหตุ")
+                st.subheader("📝 ระบุปัจจัยแวดล้อม (Categorical)")
                 with st.form("ml_predict_form"):
-                    time_period = st.selectbox("ช่วงเวลา", ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"])
-                    weather = st.selectbox("สภาพอากาศ", ["แจ่มใส", "ฝนตก", "หมอกทึบ", "ไม่ระบุ"])
-                    accident_type = st.selectbox("ลักษณะการเกิดเหตุ", [
-                        "ชนท้าย", "ชนในทิศทางตรงกันข้าม (ไม่ใช่การแซง)", "พลิกคว่ำ/ตกถนนในทางตรง", 
-                        "พลิกคว่ำ/ตกถนนในทางโค้ง", "ชนสิ่งกีดขวาง (บนผิวจราจร)", "ไม่ระบุ"
-                    ])
                     
-                    st.markdown("**ยานพาหนะที่เกี่ยวข้อง**")
-                    col_n1, col_n2 = st.columns(2)
-                    with col_n1:
-                        motorcycle = st.number_input("รถจักรยานยนต์ (คัน)", min_value=0, max_value=10, value=1)
-                        car = st.number_input("รถยนต์นั่งส่วนบุคคล (คัน)", min_value=0, max_value=10, value=0)
-                    with col_n2:
-                        pickup = st.number_input("รถปิคอัพบรรทุก4ล้อ (คัน)", min_value=0, max_value=10, value=0)
-                        pedestrian = st.number_input("คนเดินเท้า (คน)", min_value=0, max_value=10, value=0)
+                    # ตัวแปร Categorical ทั้ง 6 ตัว
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        time_period = st.selectbox("ช่วงเวลา", get_options('ช่วงเวลา', ["เช้า", "สาย", "บ่าย", "เย็น", "กลางคืน"]))
+                        province = st.selectbox("จังหวัด", get_options('จังหวัด', ["สุราษฎร์ธานี", "นครศรีธรรมราช", "ภูเก็ต"]))
+                        weather = st.selectbox("สภาพอากาศ", get_options('สภาพอากาศ', ["แจ่มใส", "ฝนตก", "ไม่ระบุ"]))
+                    with c2:
+                        location_type = st.selectbox("บริเวณที่เกิดเหตุ", get_options('บริเวณที่เกิดเหตุ', ["ทางตรง", "ทางโค้ง", "ทางแยก"]))
+                        presumed_cause = st.selectbox("มูลเหตุสันนิษฐาน", get_options('มูลเหตุสันนิษฐาน', ["ขับรถเร็วเกินกำหนด", "เมาสุรา", "ตัดหน้ากระชั้นชิด"]))
+                        accident_type = st.selectbox("ลักษณะการเกิดเหตุ", get_options('ลักษณะการเกิดเหตุ', ["ชนท้าย", "พลิกคว่ำ", "ชนสิ่งกีดขวาง"]))
+
+                    st.markdown("---")
+                    st.subheader("พิกัดสถานที่เกิดเหตุ (พิกัดสมมติ)")
+                    loc1, loc2 = st.columns(2)
+                    with loc1:
+                        lat_val = st.number_input("LATITUDE", value=8.4333, format="%.5f")
+                    with loc2:
+                        lon_val = st.number_input("LONGITUDE", value=99.9667, format="%.5f")
+
+                    st.markdown("---")
+                    st.subheader("🚗 ยานพาหนะที่เกี่ยวข้องและบุคคล (คัน/คน)")
+                    # จัดเรียง 13 พาหนะ + 1 คนเดินเท้า ให้เป็นระเบียบ
+                    v1, v2, v3 = st.columns(3)
+                    with v1:
+                        v_moto = st.number_input("รถจักรยานยนต์", 0, 50, 1)
+                        v_car = st.number_input("รถยนต์นั่งส่วนบุคคล", 0, 50, 0)
+                        v_pick_pass = st.number_input("รถปิคอัพโดยสาร", 0, 50, 0)
+                        v_truck6 = st.number_input("รถบรรทุก6ล้อ", 0, 50, 0)
+                        v_etan = st.number_input("รถอีแต๋น", 0, 50, 0)
+                    with v2:
+                        v_tri = st.number_input("รถสามล้อเครื่อง", 0, 50, 0)
+                        v_van = st.number_input("รถตู้", 0, 50, 0)
+                        v_bus = st.number_input("รถโดยสารมากกว่า4ล้อ", 0, 50, 0)
+                        v_truck10 = st.number_input("รถบรรทุกไม่เกิน10ล้อ", 0, 50, 0)
+                        v_other = st.number_input("รถอื่นๆ", 0, 50, 0)
+                    with v3:
+                        v_pick_freight = st.number_input("รถปิคอัพบรรทุก4ล้อ", 0, 50, 0)
+                        v_truck_more10 = st.number_input("รถบรรทุกมากกว่า10ล้อ", 0, 50, 0)
+                        pedestrian = st.number_input("คนเดินเท้า", 0, 50, 0)
                     
-                    # 💡 ถอดส่วนกรอกข้อมูลคนเจ็บ/เสียชีวิตออกทั้งหมดแล้วครับ
-                    
-                    submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรง 🔍")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    submit_pred = st.form_submit_button("วิเคราะห์ความรุนแรงด้วย AI 🔍", type="primary", use_container_width=True)
 
             with col_result:
                 st.subheader("🎯 ผลการทำนาย")
                 
                 if submit_pred:
-                    with st.spinner('กำลังประมวลผลผ่านโมเดล AI...'):
+                    with st.spinner('กำลังประมวลผลผ่านโมเดล...'):
                         
-                        # 💡 ส่งเฉพาะข้อมูลแวดล้อมที่ตั้งใจไว้ไปให้โมเดล
+                        # สร้าง Dictionary ยิงเข้า DataFrame ให้ชื่อ Column ตรงเป๊ะตามที่ระบุมา
                         input_dict = {
-                            'รถจักรยานยนต์': [motorcycle], 
-                            'รถยนต์นั่งส่วนบุคคล': [car],
-                            'รถปิคอัพบรรทุก4ล้อ': [pickup], 
-                            'คนเดินเท้า': [pedestrian],
+                            # Categorical
                             'ช่วงเวลา': [time_period], 
-                            'สภาพอากาศ': [weather],
+                            'จังหวัด': [province],
+                            'บริเวณที่เกิดเหตุ': [location_type],
+                            'มูลเหตุสันนิษฐาน': [presumed_cause],
                             'ลักษณะการเกิดเหตุ': [accident_type],
-                            'LATITUDE': [8.4333], 
-                            'LONGITUDE': [99.9667] 
+                            'สภาพอากาศ': [weather],
+                            
+                            # Numerical
+                            'LATITUDE': [lat_val],
+                            'LONGITUDE': [lon_val],
+                            'รถจักรยานยนต์': [v_moto],
+                            'รถสามล้อเครื่อง': [v_tri],
+                            'รถยนต์นั่งส่วนบุคคล': [v_car],
+                            'รถตู้': [v_van],
+                            'รถปิคอัพโดยสาร': [v_pick_pass],
+                            'รถโดยสารมากกว่า4ล้อ': [v_bus],
+                            'รถปิคอัพบรรทุก4ล้อ': [v_pick_freight],
+                            'รถบรรทุก6ล้อ': [v_truck6],
+                            'รถบรรทุกไม่เกิน10ล้อ': [v_truck10],
+                            'รถบรรทุกมากกว่า10ล้อ': [v_truck_more10],
+                            'รถอีแต๋น': [v_etan],
+                            'รถอื่นๆ': [v_other],
+                            'คนเดินเท้า': [pedestrian]
                         }
+                        
                         input_df = pd.DataFrame(input_dict)
                         
                         try:
-                            # 1. ดึงชื่อคอลัมน์จาก Scaler (ไฟล์ใหม่ที่เพิ่งเทรนมา)
+                            # 1. ดึงชื่อคอลัมน์จาก Scaler
                             correct_features = scaler.feature_names_in_
                             
-                            # 2. แปลงข้อมูล
+                            # 2. แปลงข้อมูล (1-Hot Encoding)
                             input_dummies = pd.get_dummies(input_df)
                             
-                            # 3. จัดเรียงคอลัมน์ให้ตรงเป๊ะ
+                            # 3. จัดเรียงคอลัมน์ให้ตรงเป๊ะ และเติม 0 ในคอลัมน์ที่ Dummy หาไม่เจอ
                             input_final = input_dummies.reindex(columns=correct_features, fill_value=0)
                             
-                            # 4. ปรับสเกล
+                            # 4. ปรับสเกลข้อมูล
                             input_scaled = scaler.transform(input_final)
                             
                             # 5. รันทำนายผล
                             prediction = model.predict(input_scaled)[0]
                             
-                            st.markdown("**ผลประเมินระดับความรุนแรง (จากปัจจัยแวดล้อม):**")
+                            st.markdown("**ผลประเมินระดับความรุนแรง:**")
                             
                             if prediction == 1: 
-                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง (มีความเสี่ยงบาดเจ็บสาหัสหรือเสียชีวิต)**")
+                                st.error("### 🔴 ระดับความรุนแรง: สูง (High Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงสูง**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
-                                - แจ้งศูนย์การแพทย์ฉุกเฉิน (EMS) พื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
-                                - ส่งเจ้าหน้าที่ตำรวจตรวจสอบและจัดการจราจรจุดเกิดเหตุทันทีเพื่อป้องกันอุบัติเหตุซ้ำซ้อน
-                                - เตรียมอุปกรณ์ตัดถ่างและส่องสว่างหากเป็นเวลากลางคืน
+                                - แจ้งศูนย์การแพทย์ฉุกเฉินพื้นที่ให้เตรียมพร้อมรถกู้ชีพขั้นสูง
+                                - ส่งเจ้าหน้าที่จัดการจราจรจุดเกิดเหตุทันทีเพื่อป้องกันอุบัติเหตุซ้ำซ้อน
+                                - เตรียมอุปกรณ์ตัดถ่างหากมีการใช้ยานพาหนะขนาดใหญ่
                                 """)
                             else:
-                                st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มบาดเจ็บเพียงเล็กน้อย หรือเสียหายแค่ทรัพย์สิน**")
+                                st.success("### 🟢 ระดับความรุนแรง: ต่ำ (Low Severity)\n**AI ประเมินว่าเหตุการณ์นี้มีแนวโน้มรุนแรงต่ำ**")
                                 st.markdown("#### 💡 คำแนะนำเบื้องต้น:")
                                 st.markdown("""
-                                - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์และให้การปฐมพยาบาล
+                                - ส่งหน่วยกู้ภัยขั้นพื้นฐานเข้าประเมินสถานการณ์
                                 - เคลียร์พื้นที่ผิวจราจรโดยเร็วเพื่อหลีกเลี่ยงการจราจรติดขัด
                                 - บันทึกภาพและเก็บรวบรวมหลักฐานความเสียหาย
                                 """)
@@ -304,7 +350,7 @@ with tab3:
                             st.error(f"⚠️ เกิดข้อผิดพลาดในการคำนวณของโมเดล:")
                             st.code(f"Error Details: {e}")
                 else:
-                    st.info("👈 กรอกข้อมูลอุบัติเหตุทางด้านซ้ายให้ครบถ้วน แล้วกดปุ่ม **วิเคราะห์ความรุนแรง 🔍**")
+                    st.info("👈 กรอกตัวแปรให้ครบถ้วนด้านซ้ายมือ แล้วคลิกปุ่มสีแดงด้านล่างสุดเพื่อประมวลผล")
 
 # ------------------------------------------
 # TAB 4: จัดการข้อมูล (CRUD)
