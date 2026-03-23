@@ -226,11 +226,23 @@ with tab1:
 # ------------------------------------------
 with tab2:
     if df is not None:
-        st.subheader("จุดเกิดเหตุอุบัติเหตุในพื้นที่")
-        map_df = df[['LATITUDE', 'LONGITUDE']].rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
-        st.map(map_df)
+        st.subheader("📍 แผนที่จุดเกิดเหตุอุบัติเหตุในพื้นที่")
+        
+        # ตรวจสอบว่ามีคอลัมน์พิกัดในไฟล์หรือไม่
+        if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
+            # ดึงเฉพาะคอลัมน์พิกัดและเปลี่ยนชื่อเป็น lat, lon (คำสั่ง st.map บังคับใช้ชื่อนี้)
+            map_df = df[['LATITUDE', 'LONGITUDE']].rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'})
+            
+            # ลบแถวที่พิกัดเป็นค่าว่าง (NaN) ออกไปเพื่อป้องกัน Error ตอนโหลดแผนที่
+            map_df = map_df.dropna()
+            
+            # แสดงแผนที่
+            st.map(map_df)
+        else:
+            st.warning("⚠️ ไม่พบคอลัมน์ 'LATITUDE' และ 'LONGITUDE' ในไฟล์ข้อมูลของคุณ")
+            
     else:
-        st.info("ไม่มีข้อมูลพิกัดเพื่อแสดงผล")
+        st.info("ไม่มีข้อมูลเพื่อแสดงผลบนแผนที่")
 
 # ------------------------------------------
 # TAB 3: ทำนายผล (Prediction)
